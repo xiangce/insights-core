@@ -126,11 +126,12 @@ def rpm_version_compare(left, right):
     if left is right:
         return 0
 
-    le, re = int(left.epoch), int(right.epoch)
-    if le < re:
-        return -1
-    elif le > re:
-        return 1
+    if None not in (left.epoch, right.epoch):
+        le, re = int(left.epoch), int(right.epoch)
+        if le < re:
+            return -1
+        elif le > re:
+            return 1
 
     rc = _rpm_vercmp(left.version, right.version)
     if rc != 0:

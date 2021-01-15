@@ -10,6 +10,7 @@ openobex-1.4-7.el6.x86_64
 openssh-server-5.3p1-104.el6.x86_64
 openssh-askpass-5.3p1-84.1.el6.x86_64
 openssl-1.0.0-27.el6.x86_64
+grub2-tools-2.02-0.34.el7_2.x86_64
 '''.strip()
 
 RPMS_PACKAGE_WITH_GARBAGE = '''
@@ -406,25 +407,31 @@ def test_pad_version_uneven_sections():
 
 
 def test_epoch():
-    rpms = InstalledRpms(context_wrap(RPMS_PACKAGE))
+    rpms_pkg = InstalledRpms(context_wrap(RPMS_PACKAGE))
     # no epoch
-    rpm = rpms.get_max('openldap')
+    rpm = rpms_pkg.get_max('openldap')
     assert rpm.package_with_epoch == 'openldap-0:2.4.23-31.el6'
     assert rpm.nevra == 'openldap-0:2.4.23-31.el6.x86_64'
 
-    rpms = InstalledRpms(context_wrap(RPMS_JSON))
+    rpms_json = InstalledRpms(context_wrap(RPMS_JSON))
     # epoch 0
-    rpm = rpms.get_max('log4j')
+    rpm = rpms_json.get_max('log4j')
     assert rpm.package_with_epoch == 'log4j-0:1.2.17-15.el7'
     assert rpm.nevra == 'log4j-0:1.2.17-15.el7.noarch'
     # epoch (none)
-    rpm = rpms.get_max('kbd-misc')
+    rpm = rpms_json.get_max('kbd-misc')
     assert rpm.package_with_epoch == 'kbd-misc-0:1.15.5-11.el7'
     assert rpm.nevra == 'kbd-misc-0:1.15.5-11.el7.noarch'
     # epoch 1
-    rpm = rpms.get_max('grub2-tools')
+    rpm = rpms_json.get_max('grub2-tools')
     assert rpm.package_with_epoch == 'grub2-tools-1:2.02-0.34.el7_2'
     assert rpm.nevra == 'grub2-tools-1:2.02-0.34.el7_2.x86_64'
+
+    # Version comparison when no epoch field
+    grub2_tools_wo_epoch = rpms_pkg.get_max('grub2-tools')
+    assert grub2_tools_wo_epoch.epoch is None
+    grub2_tools_w_epoch = rpms_json.get_max('grub2-tools')
+    assert grub2_tools_w_epoch.epoch == '1'
 
 
 def test_rpm_object_hashing():

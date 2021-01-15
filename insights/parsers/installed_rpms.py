@@ -387,14 +387,16 @@ class InstalledRpm(object):
         """bool: True when RPM package is signed by Red Hat, False when RPM package is not signed by Red Hat,
         None when no sufficient info to determine"""
         self.vendor = None
-        """str: RPM package vendor. `None` when no 'vendor' info"""
+        """str: RPM package vendor. None when no 'vendor' info"""
+        self.epoch = None
+        """str: RPM package epoch. None when no 'epoch' info"""
 
         if isinstance(data, six.string_types):
             data = self._parse_package(data)
 
         for k, v in data.items():
             setattr(self, k, v)
-        self.epoch = data['epoch'] if 'epoch' in data and data['epoch'] != '(none)' else '0'
+        self.epoch = None if 'epoch' not in data else '0' if 'none' in data['epoch'].lower() else data['epoch']
         self.vendor = data['vendor'] if 'vendor' in data else None
         _gpg_key_pos = data.get('sigpgp', data.get('rsaheader', data.get('pgpsig_short', data.get('pgpsig', data.get('vendor', '')))))
         if _gpg_key_pos:
