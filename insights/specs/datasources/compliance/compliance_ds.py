@@ -88,50 +88,51 @@ def compliance(broker):
         # Manifest for compliance is wrapped in the 'insights_config'
         # and was set in the `insights.client.config.InsightsConfig._imply_options`
 
-        # TODO: add the support of new options here
-        # # --compliance-policies was called
-        # if config.compliance_policies:
-        #     result = ComplianceClient(
-        #         os_version=broker[os_version],
-        #         ssg_version=broker[package_check],
-        #         config=insights_config
-        #     ).assignable_policies()
-        #     sys.exit(result)
+        # --compliance-policies was called
+        if config.compliance_policies:
+            result = ComplianceClient(
+                os_version=broker[os_version],
+                ssg_version=broker[package_check],
+                config=insights_config
+            ).assignable_policies()
+            raise SkipComponent
 
-        # # --compliance-assign was called
-        # if config.compliance_assign:
-        #     result = ComplianceClient(
-        #         os_version=broker[os_version],
-        #         ssg_version=broker[package_check],
-        #         config=insights_config
-        #     ).policy_link(insights_config.compliance_assign, 'patch')
-        #     sys.exit(result)
+        # --compliance-assign was called
+        if config.compliance_assign:
+            result = ComplianceClient(
+                os_version=broker[os_version],
+                ssg_version=broker[package_check],
+                config=insights_config
+            ).policy_link(insights_config.compliance_assign, 'patch')
+            raise SkipComponent
 
-        # # --compliance-unassign was called
-        # if config.compliance_unassign:
-        #     result = ComplianceClient(
-        #         os_version=broker[os_version],
-        #         ssg_version=broker[package_check],
-        #         config=insights_config
-        #     ).policy_link(insights_config.compliance_unassign, 'delete')
-        #     sys.exit(result)
+        # --compliance-unassign was called
+        if config.compliance_unassign:
+            result = ComplianceClient(
+                os_version=broker[os_version],
+                ssg_version=broker[package_check],
+                config=insights_config
+            ).policy_link(insights_config.compliance_unassign, 'delete')
+            raise SkipComponent
 
         compliance = ComplianceClient(
             os_version=broker[os_version],
             ssg_version=broker[package_check],
             config=insights_config)
         # Preparations
-        initial_profiles = compliance.get_initial_profiles()
-        matching_os_profiles = compliance.get_profiles_matching_os()
-        profiles = compliance.profile_union_by_ref_id(matching_os_profiles, initial_profiles)
+        policies = self.get_system_policies()
+        if not policies:
+            logger.error("System is not associated with any policies. Assign policies using the Compliance web UI.\n")
+            raise SkipComponent
+
         results_need_repair = compliance.results_need_repair()
         compliance_result = list()
         # OSCAP scan
-        for profile in profiles:
-            profile_ref_id = profile['attributes']['ref_id']
+        for policy in policies:
+            profile_ref_id = policy['ref_id']
             file_name = 'oscap_results-{0}'.format(profile_ref_id)
             results_file = NamedTemporaryFile(prefix=file_name, suffix='.xml', delete=True)
-            tailoring_file = compliance.download_tailoring_file(profile)
+            tailoring_file = compliance.download_tailoring_file(policy)
             compliance.run_scan(
                 profile_ref_id,
                 compliance.find_scap_policy(profile_ref_id),
