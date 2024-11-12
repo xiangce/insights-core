@@ -36,23 +36,23 @@ def phase(func):
         except Exception:
             logger.exception("Fatal error")
             sys.exit(1)
-        else:
-            sys.exit(0)  # Exit gracefully
+        # else:
+        #     sys.exit(0)  # Exit gracefully
     return _f
 
 
 def get_phases():
     return [{
-        'name': 'pre_update',
+        'func': pre_update,
         'run_as_root': True
     }, {
-        'name': 'update',
+        'func': update,
         'run_as_root': True
     }, {
-        'name': 'post_update',
+        'func': post_update,
         'run_as_root': True
     }, {
-        'name': 'collect_and_output',
+        'func': collect_and_output,
         'run_as_root': True
     }]
 
@@ -65,7 +65,7 @@ def pre_update(client, config):
         logger.warning('WARN: BASIC authentication method is being deprecated. Please consider using CERT authentication method.')
 
     if config.version:
-        logger.info(constants.version)
+        logger.info(client.version())
         sys.exit(constants.sig_kill_ok)
 
     # validate the remove file
@@ -373,3 +373,12 @@ def collect_and_output(client, config):
                     constants.insights_core_last_stable))
         logger.debug(message)
         raise IOError(message)
+
+
+def main():
+    for p in get_phases():
+        p['func']()
+
+
+if __name__ == "__main__":
+    main()

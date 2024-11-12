@@ -11,6 +11,7 @@ for name in package_info:
 
 entry_points = {
     'console_scripts': [
+        'core-client= insights.client.phase.v1:main',
         'insights-collect = insights.collect:main',
         'insights-run = insights:main',
         'insights = insights.command_parser:main',
@@ -25,12 +26,14 @@ entry_points = {
 
 runtime = set([
     'six',
+    'rhsm',
     'requests',
     'redis',
     'cachecontrol',
     'cachecontrol[redis]',
     'cachecontrol[filecache]',
     'defusedxml',
+    'python-dateutil',
     'lockfile',
     'jinja2<=2.11.3; python_version <= "2.7"',
     'jinja2; python_version > "2.7"',
