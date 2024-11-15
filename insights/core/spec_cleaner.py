@@ -54,8 +54,31 @@ def write_report(report, report_file, mode=0o644):
         logger.error('Could not write to %s: %s', report_file, str(e))
 
 
+def deep_clean(cfacts=None, config=None, redact_config=None):
+    def _deep_clean(data):
+        """
+        Clean (obfuscate and redact) the data items one by one.
+        """
+        if isinstance(data, dict):
+            for key, values in data.items():
+                data[key] = _deep_clean(values)
+        elif isinstance(data, list):
+            for i, item in enumerate(data):
+                data[i] = _deep_clean(item)
+        elif isinstance(data, str):
+            return cleaner.clean_content(
+                data,
+                obf_funcs=obf_funcs,
+                no_redact=False)
+        return data
+    # Clean (obfuscate and redact) the "c_facts"
+    cleaner = Cleaner(config, redact_config)
+    obf_funcs = cleaner.get_obfuscate_functions()
+    return _deep_clean(cfacts)
+
+
 class Cleaner(object):
-    def __init__(self, config, rm_conf, fqdn=None):
+    def __init__(self, config, redact_config, fqdn=None):
         self.report_dir = '/tmp'
         self.rhsm_facts_file = getattr(
             config, 'rhsm_facts_file', os.path.join(self.report_dir, 'insights-client.facts')
@@ -67,8 +90,8 @@ class Cleaner(object):
 
         # File Content Redaction
         # - Pattern redaction
-        rm_conf = rm_conf or {}
-        exclude = rm_conf.get('patterns', [])
+        redact_config = redact_config or {}
+        exclude = redact_config.get('patterns', [])
         regex = False
         if isinstance(exclude, dict) and exclude.get('regex'):
             exclude = [r'%s' % replace_posix(i) for i in exclude['regex']]
@@ -77,7 +100,7 @@ class Cleaner(object):
 
         # - Keyword replacement redact information
         #   Keyword replacement does NOT depend on "obfuscate=True"
-        keywords = rm_conf.get('keywords')
+        keywords = redact_config.get('keywords')
         self.kw_db = dict()  # keyword database
         self.kws = set()  # keywords that have been replaced
         self._keywords2db(keywords)

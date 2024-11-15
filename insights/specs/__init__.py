@@ -7,6 +7,7 @@ class Specs(SpecSet):
     blacklist_report = RegistryPoint(prio=-1)
     blacklisted_specs = RegistryPoint(no_obfuscate=['hostname', 'ip'], prio=-1)
     branch_info = RegistryPoint()  # https://issues.redhat.com/browse/RHIN-639
+    canonical_facts = RegistryPoint(prio=-1)
     display_name = RegistryPoint(no_obfuscate=['hostname', 'ip'])
     egg_release = RegistryPoint()
     tags = RegistryPoint(no_obfuscate=['hostname', 'ip'])

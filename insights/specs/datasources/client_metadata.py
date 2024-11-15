@@ -16,6 +16,15 @@ from insights.core.exceptions import SkipComponent, ContentException
 from insights.core.plugins import datasource
 from insights.core.spec_factory import DatasourceProvider
 
+from insights.combiners.cloud_instance import CloudInstance
+from insights.parsers.client_metadata import MachineID
+from insights.parsers.dmidecode import DMIDecode
+from insights.parsers.etc_machine_id import EtcMachineId
+from insights.parsers.hostname import Hostname
+from insights.parsers.ip import IPs
+from insights.parsers.mac import MacAddress
+from insights.parsers.subscription_manager import SubscriptionManagerID
+
 try:
     from insights_client.constants import InsightsConstants as wrapper_constants
 except ImportError:
@@ -161,6 +170,51 @@ def branch_info(broker):
                               relative_path='branch_info')
 
 
+@datasource(
+    HostContext,
+    optional=[
+        MachineID,
+        EtcMachineId,
+        DMIDecode,
+        SubscriptionManagerID,
+        IPs,
+        Hostname,
+        MacAddress,
+        CloudInstance,
+    ]
+)
+def canonical_facts(broker):
+    """
+    """
+    try:
+        insights_id = broker.get(MachineID)
+        machine_id = broker.get(EtcMachineId)
+        dmidecode = broker.get(DMIDecode)
+        submanid = broker.get(SubscriptionManagerID)
+        ips = broker.get(IPs)
+        hostname = broker.get(Hostname)
+        mac_addresses = broker.get(MacAddress)
+        cloud_instance = broker.get(CloudInstance)
+        facts = dict(
+            insights_id=insights_id.uuid if insights_id else None,
+            machine_id=machine_id.uuid if machine_id else None,
+            bios_uuid=dmidecode.system_uuid if dmidecode else None,
+            subscription_manager_id=submanid.uuid if submanid else None,
+            ip_addresses=ips.ipv4_addresses if ips else [],
+            mac_addresses=list(filter(None, [mc.address for mc in mac_addresses or []])),
+            fqdn=hostname.fqdn if hostname else None,
+            provider_id=cloud_instance.id if cloud_instance else None,
+            provider_type=cloud_instance.provider if cloud_instance else None,
+        )
+        facts = dict((k, v) for k, v in facts.items() if v)
+    except:
+        logger.debug('Error getting canonical facts:')
+        raise SkipComponent
+
+    return DatasourceProvider(content=json.dumps(facts),
+                              relative_path='canonical_facts')
+
+
 @datasource(HostContext)
 def display_name(broker):
     """
@@ -275,7 +329,7 @@ def version_info(broker):
         str: The JSON strings of version info
     """
     try:
-        client_version = wrapper_constants.version
+        client_version = constants.version
     except AttributeError:
         client_version = None
 

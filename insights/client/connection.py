@@ -35,7 +35,6 @@ from .cert_auth import rhsmCertificate
 from .constants import InsightsConstants as constants
 from insights import package_info
 from insights.client.collection_rules import InsightsUploadConf
-from insights.core import spec_cleaner
 from insights.util.canonical_facts import get_canonical_facts
 
 warnings.simplefilter('ignore')
@@ -949,8 +948,10 @@ class InsightsConnection(object):
         upload_url = self.upload_url
         c_facts = {}
 
+        logger.debug('Canonical facts collected:\n%s', c_facts)
         try:
-            c_facts = get_canonical_facts()
+            rm_conf = InsightsUploadConf(self.config).get_rm_conf()
+            c_facts = get_canonical_facts(path=data_collected, config=self.config, redact_config=rm_conf)
         except Exception as e:
             logger.debug('Error getting canonical facts: %s', e)
         if self.config.display_name:
@@ -962,8 +963,6 @@ class InsightsConnection(object):
         if self.config.branch_info:
             c_facts["branch_info"] = self.config.branch_info
             c_facts["satellite_id"] = self.config.branch_info["remote_leaf"]
-        # Clean (obfuscate and redact) the "c_facts"
-        c_facts = json.dumps(self._clean_facts(c_facts))
         logger.debug('Canonical facts collected:\n%s', c_facts)
 
         files = {
@@ -1147,8 +1146,8 @@ class InsightsConnection(object):
             return False
 
         try:
-            canonical_facts = get_canonical_facts()
-            canonical_facts = self._clean_facts(canonical_facts)
+            rm_conf = InsightsUploadConf(self.config).get_rm_conf()
+            canonical_facts = get_canonical_facts(config=self.config, redact_config=rm_conf)
         except Exception as e:
             print('Error getting canonical facts: %s', e)
             logger.debug('Error getting canonical facts: %s', e)
@@ -1181,26 +1180,3 @@ class InsightsConnection(object):
         else:
             logger.debug("Check-in response body %s" % response.text)
             raise RuntimeError("Unknown check-in API response")
-
-    def _clean_facts(self, cfacts):
-        def _deep_clean(data):
-            """
-            Clean (obfuscate and redact) the data items one by one.
-            """
-            if isinstance(data, dict):
-                for key, values in data.items():
-                    data[key] = _deep_clean(values)
-            elif isinstance(data, list):
-                for i, item in enumerate(data):
-                    data[i] = _deep_clean(item)
-            elif isinstance(data, str):
-                return cleaner.clean_content(
-                    data,
-                    obf_funcs=obf_funcs,
-                    no_redact=False)
-            return data
-        # Clean (obfuscate and redact) the "c_facts"
-        pc = InsightsUploadConf(self.config)
-        cleaner = spec_cleaner.Cleaner(self.config, pc.get_rm_conf())
-        obf_funcs = cleaner.get_obfuscate_functions()
-        return _deep_clean(cfacts)
