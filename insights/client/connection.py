@@ -1176,8 +1176,7 @@ class InsightsConnection(object):
             elif isinstance(data, str):
                 return cleaner.clean_content(
                     data,
-                    obf_funcs=obf_funcs,
-                    no_redact=False)
+                    obf_funcs=obf_funcs)
             return data
         # Clean (obfuscate and redact) the "c_facts"
         pc = InsightsUploadConf(self.config)

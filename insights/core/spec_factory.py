@@ -84,9 +84,6 @@ class ContentProvider(object):
         content = self.content  # load first for debugging info order
         if isinstance(self.ctx, HostContext) and self.ds and self.cleaner:
             cleans = []
-            # Redacting?
-            no_red = getattr(self.ds, 'no_redact', False)
-            cleans.append("Redact") if not no_red else None
             # Obfuscating?
             no_obf = getattr(self.ds, 'no_obfuscate', [])
             cleans.append("Obfuscate") if len(no_obf) < 2 else None
@@ -96,7 +93,6 @@ class ContentProvider(object):
                 content = self.cleaner.clean_content(
                     content,
                     obf_funcs=self.cleaner.get_obfuscate_functions(self.relative_path, no_obf),
-                    no_redact=no_red,
                 )
                 if len(content) == 0:
                     log.debug("Skipping %s due to empty after cleaning", self.path)
@@ -161,7 +157,6 @@ class DatasourceProvider(ContentProvider):
         ctx=None,
         cleaner=None,
         no_obfuscate=None,
-        no_redact=False,
     ):
         super(DatasourceProvider, self).__init__()
         self.relative_path = relative_path.lstrip("/")
@@ -172,7 +167,6 @@ class DatasourceProvider(ContentProvider):
         self.ctx = ctx
         self.cleaner = cleaner
         self.no_obfuscate = no_obfuscate or []
-        self.no_redact = no_redact
 
     def _stream(self):
         """
@@ -550,13 +544,11 @@ class RegistryPoint(object):
         raw=False,
         filterable=False,
         no_obfuscate=None,
-        no_redact=False,
         prio=0,
     ):
         self.metadata = metadata
         self.multi_output = multi_output
         self.no_obfuscate = [] if no_obfuscate is None else no_obfuscate
-        self.no_redact = no_redact
         self.prio = prio
         self.raw = raw
         self.filterable = filterable
@@ -568,7 +560,6 @@ class RegistryPoint(object):
             raw=raw,
             filterable=filterable,
             no_obfuscate=self.no_obfuscate,
-            no_redact=no_redact,
             prio=prio,
         )(self)
 
@@ -657,7 +648,6 @@ def _resolve_registry_points(cls, base, dct):
                 v.raw = delegate.raw = point.raw
                 v.multi_output = delegate.multi_output = point.multi_output
                 v.no_obfuscate = delegate.no_obfuscate = point.no_obfuscate
-                v.no_redact = delegate.no_redact = point.no_redact
                 v.prio = delegate.prio = point.prio
 
                 # the RegistryPoint gets the implementation datasource as a

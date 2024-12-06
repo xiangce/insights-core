@@ -439,7 +439,7 @@ class Specs(SpecSet):
     lvs_noheadings = RegistryPoint(no_obfuscate=['hostname', 'ip'])
     lvs_noheadings_all = RegistryPoint(no_obfuscate=['hostname', 'ip'])
     mac_addresses = RegistryPoint(multi_output=True, no_obfuscate=['hostname', 'ip'])
-    machine_id = RegistryPoint(no_obfuscate=['hostname', 'ip'], no_redact=True)
+    machine_id = RegistryPoint(no_obfuscate=['hostname', 'ip', 'password'])
     manila_conf = RegistryPoint(no_obfuscate=['hostname', 'ip'])
     mariadb_log = RegistryPoint(filterable=True)
     max_uid = RegistryPoint(no_obfuscate=['hostname', 'ip'])
@@ -504,7 +504,9 @@ class Specs(SpecSet):
     nginx_ssl_cert_enddate = RegistryPoint(multi_output=True)
     nmap_ssh = RegistryPoint()
     nmcli_conn_show = RegistryPoint(no_obfuscate=['hostname', 'ip'])
-    nmcli_conn_show_uuids = RegistryPoint(multi_output=True, no_obfuscate=['hostname', 'ip'], filterable=True)
+    nmcli_conn_show_uuids = RegistryPoint(
+        multi_output=True, no_obfuscate=['hostname', 'ip'], filterable=True
+    )
     nmcli_dev_show = RegistryPoint()
     nmcli_dev_show_sos = RegistryPoint(multi_output=True)
     nova_api_log = RegistryPoint(filterable=True)
@@ -579,7 +581,7 @@ class Specs(SpecSet):
     pcp_metrics = RegistryPoint()
     pcp_openmetrics_log = RegistryPoint(filterable=True)
     pcp_raw_data = RegistryPoint(
-        raw=True, multi_output=True, no_obfuscate=['hostname', 'ip'], no_redact=True
+        raw=True, multi_output=True, no_obfuscate=['hostname', 'ip']
     )  # No Parser required
     pcs_config = RegistryPoint()
     pcs_quorum_status = RegistryPoint()
@@ -749,13 +751,13 @@ class Specs(SpecSet):
     sshd_config = RegistryPoint(filterable=True)
     sshd_config_d = RegistryPoint(multi_output=True, filterable=True)
     sshd_config_perms = RegistryPoint(no_obfuscate=['hostname', 'ip'])
-    sshd_test_mode = RegistryPoint(filterable=True, no_redact=True)
+    sshd_test_mode = RegistryPoint(filterable=True, no_obfuscate=['password'])  # RHINENG-13331
     sssd_config = RegistryPoint()
     sssd_conf_d = RegistryPoint(multi_output=True)
     sssd_logs = RegistryPoint(multi_output=True, filterable=True)
     sys_block_queue_stable_writes = RegistryPoint(multi_output=True)
     subscription_manager_facts = RegistryPoint(filterable=True)
-    subscription_manager_id = RegistryPoint(no_obfuscate=['ip'], no_redact=True)
+    subscription_manager_id = RegistryPoint(no_obfuscate=['ip', 'password'])
     subscription_manager_installed_product_ids = RegistryPoint(
         filterable=True, no_obfuscate=['hostname', 'ip']
     )

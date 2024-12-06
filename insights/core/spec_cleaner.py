@@ -12,6 +12,7 @@ The following processes will be applied to clean the collected specs:
       specs native requirement and user configuration.
 
 """
+
 import logging
 import hashlib
 import json
@@ -55,10 +56,10 @@ class Cleaner(object):
     def __init__(self, config, rm_conf, fqdn=None):
         self.report_dir = '/tmp'
         self.rhsm_facts_file = getattr(
-                config, 'rhsm_facts_file',
-                os.path.join(self.report_dir, 'insights-client.facts'))
+            config, 'rhsm_facts_file', os.path.join(self.report_dir, 'insights-client.facts')
+        )
         # Obfuscation - set: ip and hostname only
-        self.obfuscate = set()
+        self.obfuscate = set('password')  # password obfuscation is enabled by default
         self.obfuscate.add('ip') if config and config.obfuscate else None
         self.obfuscate.add('hostname') if config and config.obfuscate_hostname else None
 
@@ -76,7 +77,7 @@ class Cleaner(object):
         #   Keyword replacement does NOT depend on "obfuscate=True"
         keywords = rm_conf.get('keywords')
         self.kw_db = dict()  # keyword database
-        self.kws = set()     # keywords that have been replaced
+        self.kws = set()  # keywords that have been replaced
         self._keywords2db(keywords)
 
         # Obfuscation
@@ -103,8 +104,8 @@ class Cleaner(object):
         if config and config.obfuscate_hostname and self.fqdn:
             self._domains2db()
             hashed_hostname = hashlib.sha1(
-                    self.fqdn.encode('utf-8')
-                    if six.PY3 else self.fqdn).hexdigest()[:12]
+                self.fqdn.encode('utf-8') if six.PY3 else self.fqdn
+            ).hexdigest()[:12]
             self.obfuscated_fqdn = '{0}.example.com'.format(hashed_hostname)
             self.hostname_count += 1
             self.hn_db[self.obfuscated_fqdn] = self.fqdn
@@ -137,9 +138,9 @@ class Cleaner(object):
             if v == ip_num:
                 ret_ip = self._int2ip(k)
                 ip_found = True
-        if ip_found:                # the entry already existed
+        if ip_found:  # the entry already existed
             return ret_ip
-        else:                       # the entry did not already exist
+        else:  # the entry did not already exist
             if len(self.ip_db) > 0:
                 new_ip = max(db.keys()) + 1
             else:
@@ -213,7 +214,7 @@ class Cleaner(object):
                                 if idx == len(line):
                                     break
                                 c = line[idx]
-                            line = line[0:idx] + line[(idx + numspaces):]
+                            line = line[0:idx] + line[(idx + numspaces) :]
 
                         else:
                             line = line.replace(ip, new_ip)
@@ -232,7 +233,9 @@ class Cleaner(object):
             # we will add the root domain for an FQDN as well.
             if self.domain is not None:
                 self.dn_db[self.obfuscated_domain] = self.domain
-                logger.debug("Obfuscated Domain Created - %s -> %s" % (self.domain, self.obfuscated_domain))
+                logger.debug(
+                    "Obfuscated Domain Created - %s -> %s" % (self.domain, self.obfuscated_domain)
+                )
 
             self.domain_count = len(self.dn_db)
             return True
@@ -252,7 +255,9 @@ class Cleaner(object):
         if hn_found:
             return ret_hn
         else:
-            self.hostname_count += 1  # we have a new hostname, so we increment the counter to get the host ID number
+            self.hostname_count += (
+                1  # we have a new hostname, so we increment the counter to get the host ID number
+            )
             o_domain = self.obfuscated_domain
             for od, d in self.dn_db.items():
                 if d in hn:  # never false
@@ -279,7 +284,9 @@ class Cleaner(object):
                         logger.debug("Obfuscating FQDN - %s > %s", hn, new_hn)
                         line = line.replace(hn, new_hn)
             if self.hostname:
-                line = line.replace(self.hostname, self._hn2db(self.fqdn))  # catch any non-fqdn instances of the system hostname
+                line = line.replace(
+                    self.hostname, self._hn2db(self.fqdn)
+                )  # catch any non-fqdn instances of the system hostname
             return line
         except Exception as e:  # pragma: no cover
             logger.warning(e)
@@ -316,6 +323,22 @@ class Cleaner(object):
         return line
 
     ###########################
+    #   Password functions    #
+    ###########################
+
+    def _sub_password(self, line):
+        # password obfuscation
+        if not line:
+            return line
+        for regex in DEFAULT_PASSWORD_REGEXS:
+            tmp_line = line
+            line = re.sub(regex, r"\1\2********", tmp_line)
+            if line != tmp_line:
+                logger.debug("Obfuscate potetial password - %s -> %s", tmp_line, line)
+                break
+        return line
+
+    ###########################
     #   Main functions        #
     ###########################
 
@@ -338,13 +361,8 @@ class Cleaner(object):
             logger.debug("Pattern matched, removing line: %s" % line.strip())
             # patterns found, remove it
             return None
-        # 2. password removal
-        for regex in DEFAULT_PASSWORD_REGEXS:
-            tmp_line = line
-            line = re.sub(regex, r"\1\2********", tmp_line)
-            if line != tmp_line:
-                break
-        # 3. keyword replacement redaction
+        # 2. keyword replacement redaction
+        #  - keyword replacement is classified as redaction in manual
         return self._sub_keywords(line)
 
     def get_obfuscate_functions(self, filename='', no_obfuscate=None):
@@ -359,20 +377,28 @@ class Cleaner(object):
         # Get the actual obfuscate list setting for this file
         obfs = set(self.obfuscate) - set(no_obfuscate or [])
         # IP obfuscation entry
-        obf_funcs.append(self._sub_ip_netstat if filename.endswith("netstat_-neopa") else self._sub_ip) if "ip" in obfs else None
+        (
+            obf_funcs.append(
+                self._sub_ip_netstat if filename.endswith("netstat_-neopa") else self._sub_ip
+            )
+            if "ip" in obfs
+            else None
+        )
         # Hostname obfuscation entry
         obf_funcs.append(self._sub_hostname) if "hostname" in obfs else None
+        # Password obfuscation entry
+        obf_funcs.append(self._sub_password) if "password" in obfs else None
         return obf_funcs
 
-    def clean_content(self, lines, obf_funcs=None, no_redact=False):
+    def clean_content(self, lines, obf_funcs=None):
         """
         Clean lines one by one according to the configuration, the cleaned
         lines will be returned.
         """
+
         def _clean_line(_line):
-            # 1. Do Redaction by default, unless "no_redact=True"
-            if _line and not no_redact:
-                _line = self._redact_line(_line)
+            # 1. Do Redaction by default
+            _line = self._redact_line(_line)
             # 2. Do Obfuscation as per the "obf_funcs"
             _line = self._obfuscate_line(_line, obf_funcs or [])
             return _line
@@ -391,7 +417,7 @@ class Cleaner(object):
         # All lines blank
         return []
 
-    def clean_file(self, _file, no_obfuscate=None, no_redact=False):
+    def clean_file(self, _file, no_obfuscate=None):
         """
         Clean a file according to the configuration, the file will be updated
         directly with the cleaned content.
@@ -405,7 +431,7 @@ class Cleaner(object):
             try:
                 with open(_file, 'r') as fh:
                     raw_data = fh.readlines()
-                    content = self.clean_content(raw_data, obf_funcs, no_redact)
+                    content = self.clean_content(raw_data, obf_funcs)
             except Exception as e:  # pragma: no cover
                 logger.warning(e)
                 raise Exception("Error: Cannot Open File for Cleaning: %s" % _file)
@@ -437,11 +463,7 @@ class Cleaner(object):
 
         ip_block = []
         for k, v in self.ip_db.items():
-            ip_block.append(
-                {
-                    'original': self._int2ip(v),
-                    'obfuscated': self._int2ip(k)
-                })
+            ip_block.append({'original': self._int2ip(v), 'obfuscated': self._int2ip(k)})
 
         facts = {
             'insights_client.hostname': self.fqdn,
