@@ -35,7 +35,23 @@ client:
 
   persist:
     # determines what will appear in the archive
-    - name: insights.specs.default.DefaultSpecs.malware_detection
+    - name: insights.specs.Specs.malware_detection
+      enabled: true
+    - name: insights.specs.Specs.ansible_host
+      enabled: true
+    - name: insights.specs.Specs.blacklist_report
+      enabled: true
+    - name: insights.specs.Specs.blacklisted_specs
+      enabled: true
+    - name: insights.specs.Specs.branch_info
+      enabled: true
+    - name: insights.specs.Specs.display_name
+      enabled: true
+    - name: insights.specs.Specs.egg_release
+      enabled: true
+    - name: insights.specs.Specs.tags
+      enabled: true
+    - name: insights.specs.Specs.version_info
       enabled: true
 
   run_strategy:
@@ -53,36 +69,41 @@ plugins:
     - insights.specs.default
   configs:
     # determines which specs get loaded
+    - name: insights.specs.Specs.malware_detection
+      enabled: true
     - name: insights.specs.default.DefaultSpecs.malware_detection
-      enabled: true
-    # Enable specs for collecting the system's canonical facts
-    - name: insights.specs.default.DefaultSpecs.mac_addresses
-      enabled: true
-    - name: insights.specs.Specs.mac_addresses
-      enabled: true
-    - name: insights.specs.default.DefaultSpecs.etc_machine_id
-      enabled: true
-    - name: insights.specs.Specs.etc_machine_id
-      enabled: true
-    - name: insights.specs.default.DefaultSpecs.hostname
-      enabled: true
-    - name: insights.specs.Specs.hostname
-      enabled: true
-    - name: insights.specs.default.DefaultSpecs.dmidecode
       enabled: true
     - name: insights.specs.Specs.dmidecode
       enabled: true
-    - name: insights.specs.default.DefaultSpecs.machine_id
+    - name: insights.specs.Specs.etc_machine_id
       enabled: true
-    - name: insights.specs.Specs.machine_id
+    - name: insights.specs.Specs.hostname
       enabled: true
-    - name: insights.specs.default.DefaultSpecs.ip_addresses
+    - name: insights.specs.Specs.installed_rpms
       enabled: true
     - name: insights.specs.Specs.ip_addresses
       enabled: true
-    - name: insights.specs.default.DefaultSpecs.subscription_manager_id
+    - name: insights.specs.Specs.mac_addresses
+      enabled: true
+    - name: insights.specs.Specs.machine_id
       enabled: true
     - name: insights.specs.Specs.subscription_manager_id
+      enabled: true
+    - name: insights.specs.default.DefaultSpecs.dmidecode
+      enabled: true
+    - name: insights.specs.default.DefaultSpecs.etc_machine_id
+      enabled: true
+    - name: insights.specs.default.DefaultSpecs.hostname
+      enabled: true
+    - name: insights.specs.default.DefaultSpecs.installed_rpms
+      enabled: true
+    - name: insights.specs.default.DefaultSpecs.ip_addresses
+      enabled: true
+    - name: insights.specs.default.DefaultSpecs.mac_addresses
+      enabled: true
+    - name: insights.specs.default.DefaultSpecs.machine_id
+      enabled: true
+    - name: insights.specs.default.DefaultSpecs.subscription_manager_id
       enabled: true
 """.lstrip()
 
@@ -114,6 +135,22 @@ client:
       enabled: true
     - name: insights.specs.Specs.compliance_unassign
       enabled: true
+    - name: insights.specs.Specs.ansible_host
+      enabled: true
+    - name: insights.specs.Specs.blacklist_report
+      enabled: true
+    - name: insights.specs.Specs.blacklisted_specs
+      enabled: true
+    - name: insights.specs.Specs.branch_info
+      enabled: true
+    - name: insights.specs.Specs.display_name
+      enabled: true
+    - name: insights.specs.Specs.egg_release
+      enabled: true
+    - name: insights.specs.Specs.tags
+      enabled: true
+    - name: insights.specs.Specs.version_info
+      enabled: true
 
   run_strategy:
     name: serial
@@ -132,8 +169,6 @@ plugins:
     # determines which specs get loaded
     - name: insights.specs.datasources.compliance.compliance_ds
       enabled: true
-    - name: insights.specs.Specs.compliance
-      enabled: true
     - name: insights.specs.default.DefaultSpecs.compliance
       enabled: true
     - name: insights.specs.default.DefaultSpecs.compliance_policies
@@ -142,53 +177,53 @@ plugins:
       enabled: true
     - name: insights.specs.default.DefaultSpecs.compliance_unassign
       enabled: true
-
-    # Enable specs for collecting the system's canonical facts
-    - name: insights.specs.default.DefaultSpecs.mac_addresses
-      enabled: true
-    - name: insights.specs.Specs.mac_addresses
-      enabled: true
-    - name: insights.specs.default.DefaultSpecs.etc_machine_id
-      enabled: true
-    - name: insights.specs.Specs.etc_machine_id
-      enabled: true
-    - name: insights.specs.default.DefaultSpecs.hostname
-      enabled: true
-    - name: insights.specs.Specs.hostname
-      enabled: true
-    - name: insights.specs.default.DefaultSpecs.dmidecode
-      enabled: true
-    - name: insights.specs.Specs.dmidecode
-      enabled: true
-    - name: insights.specs.default.DefaultSpecs.machine_id
-      enabled: true
-    - name: insights.specs.Specs.machine_id
-      enabled: true
-    - name: insights.specs.default.DefaultSpecs.ip_addresses
-      enabled: true
-    - name: insights.specs.Specs.ip_addresses
-      enabled: true
-    - name: insights.specs.default.DefaultSpecs.subscription_manager_id
-      enabled: true
-    - name: insights.specs.Specs.subscription_manager_id
-      enabled: true
-    - name: insights.specs.Specs.redhat_release
-      enabled: true
-    - name: insights.specs.default.DefaultSpecs.redhat_release
-      enabled: true
-    - name: insights.specs.Specs.os_release
-      enabled: true
-    - name: insights.specs.default.DefaultSpecs.os_release
-      enabled: true
-    - name: insights.parsers.redhat_release.RedhatRelease
+    - name: insights.parsers.installed_rpms.InstalledRpms
       enabled: true
     - name: insights.parsers.os_release.OsRelease
       enabled: true
+    - name: insights.parsers.redhat_release.RedhatRelease
+      enabled: true
+    - name: insights.specs.Specs.compliance
+      enabled: true
+    - name: insights.specs.Specs.dmidecode
+      enabled: true
+    - name: insights.specs.Specs.etc_machine_id
+      enabled: true
+    - name: insights.specs.Specs.hostname
+      enabled: true
     - name: insights.specs.Specs.installed_rpms
+      enabled: true
+    - name: insights.specs.Specs.ip_addresses
+      enabled: true
+    - name: insights.specs.Specs.mac_addresses
+      enabled: true
+    - name: insights.specs.Specs.machine_id
+      enabled: true
+    - name: insights.specs.Specs.os_release
+      enabled: true
+    - name: insights.specs.Specs.redhat_release
+      enabled: true
+    - name: insights.specs.Specs.subscription_manager_id
+      enabled: true
+    - name: insights.specs.default.DefaultSpecs.dmidecode
+      enabled: true
+    - name: insights.specs.default.DefaultSpecs.etc_machine_id
+      enabled: true
+    - name: insights.specs.default.DefaultSpecs.hostname
       enabled: true
     - name: insights.specs.default.DefaultSpecs.installed_rpms
       enabled: true
-    - name: insights.parsers.installed_rpms.InstalledRpms
+    - name: insights.specs.default.DefaultSpecs.ip_addresses
+      enabled: true
+    - name: insights.specs.default.DefaultSpecs.mac_addresses
+      enabled: true
+    - name: insights.specs.default.DefaultSpecs.machine_id
+      enabled: true
+    - name: insights.specs.default.DefaultSpecs.os_release
+      enabled: true
+    - name: insights.specs.default.DefaultSpecs.redhat_release
+      enabled: true
+    - name: insights.specs.default.DefaultSpecs.subscription_manager_id
       enabled: true
 """.lstrip()
 
