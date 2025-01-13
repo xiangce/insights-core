@@ -208,7 +208,7 @@ class FileProvider(ContentProvider):
             if self.ds and filters.ENABLED
             else False
         )
-        self._filters = filters.get_filters(self.ds, True) if self.ds else set()
+        self._filters = filters.get_filters(self.ds, True) if self.ds else dict()
 
         self.validate()
 
@@ -267,7 +267,7 @@ class TextFileProvider(FileProvider):
         args = []
         if self._filters:
             log.debug("Pre-filtering %s", self.relative_path)
-            args.append(["grep", "-F", "\n".join(self._filters), self.path])
+            args.append(["grep", "-F", "\n".join(reversed(self._filters)), self.path])
 
         return args
 
@@ -361,7 +361,7 @@ class CommandOutputProvider(ContentProvider):
             if self.ds and filters.ENABLED
             else False
         )
-        self._filters = filters.get_filters(self.ds, True) if self.ds else set()
+        self._filters = filters.get_filters(self.ds, True) if self.ds else dict()
 
         self.validate()
 
@@ -389,7 +389,7 @@ class CommandOutputProvider(ContentProvider):
 
         if self.split and self._filters:
             log.debug("Pre-filtering  %s", self.relative_path)
-            command.append(["grep", "-F", "\n".join(self._filters)])
+            command.append(["grep", "-F", "\n".join(reversed(self._filters))])
 
         return command
 
