@@ -45,6 +45,18 @@ from insights.cleaner.utilities import write_report
 from insights.util.hostname import determine_hostname
 from insights.util.posix_regex import replace_posix
 
+if six.PY3:
+
+    def printable(s):
+        return s.isprintable()
+
+else:
+    import string
+
+    def printable(s):
+        return all(c in string.printable for c in s)
+
+
 logger = logging.getLogger(__name__)
 DEFAULT_OBFUSCATIONS = {
     'hostname',
@@ -109,9 +121,11 @@ class Cleaner(object):
         """
 
         def _clean_line(line):
-            for parser, kwargs in parsers:
-                line = parser.parse_line(line, **kwargs)
-            return line
+            # keep and parse printable line only
+            if printable(line):
+                for parser, kwargs in parsers:
+                    line = parser.parse_line(line, **kwargs)
+                return line
 
         # List of parsers to be applied with Order
         parsers = list()
