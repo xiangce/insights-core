@@ -71,8 +71,6 @@ def test_load():
             if filter_kw in '{0}Some'.format(i)
         ]
     )
-    print(broker[Stuff.large_file].content)
-    print(broker[Stuff.large_file_wf].content)
     # Clean up
     shutil.rmtree(temp_dir)
     spec_factory.MAX_CONTENT_SIZE = old
