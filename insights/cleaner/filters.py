@@ -17,7 +17,7 @@ class AllowFilter(object):
         # filter line as per the allow list specified by plugins
         if not line:
             return line
-        allowlist = kwargs.get('allowlist', {})
+        allowlist = dict(kwargs.get('allowlist', {}))
         if allowlist:
             for a_key in list(allowlist.keys()):  # copy keys to avoid RuntimeError
                 # keep line when any filter match
@@ -50,6 +50,7 @@ class AllowFilter(object):
         :param allowlist: dictionary of allowlist
         :return: list of lines
         """
+        allowlist = dict(allowlist)
         result = []
         for idx in range(len(lines) - 1, -1, -1):
             for a_key in list(allowlist.keys()):  # copy keys to avoid RuntimeError

@@ -140,6 +140,8 @@ class ContentProvider(object):
         return self._content
 
     def write(self, dst):
+        if "messages" in dst:
+            log.error('======[CORE DEBUG]====== HI writing here')
         fs.ensure_path(os.path.dirname(dst))
         # Clean Spec Content when writing it down to disk before uploading
         content = "\n".join(self._clean_content())
@@ -289,17 +291,34 @@ class TextFileProvider(FileProvider):
             return out
 
         fsize = os.stat(self.path).st_size
+        if 'messages' in self.path:
+            log.error(
+                '======[CORE DEBUG]====== message file size=%s (buffer=%s)', fsize, MAX_CONTENT_SIZE
+            )
         with safe_open(self.path, "r", encoding=encoding, errors="surrogateescape") as f:
             if fsize > MAX_CONTENT_SIZE:
                 # read the last ``MAX_CONTENT_SIZE`` MB only
                 f.seek(fsize - MAX_CONTENT_SIZE)
+                log.error("Extra-huge file is truncated %s", self.relative_path)
                 log.debug("Extra-huge file is truncated %s", self.relative_path)
                 content = [l.rstrip("\n") for l in f][1:]  # discard the first line which is broken
             else:
                 content = [l.rstrip("\n") for l in f]
+            if 'messages' in self.path:
+                log.error('======[CORE DEBUG]====== all messages (before filter): %s', len(content))
+                log.error('======[CORE DEBUG]====== first: %s', content[0])
+                log.error('======[CORE DEBUG]====== last: %s', content[-1])
+                log.error('======[CORE DEBUG]====== filters (B): %s', self._filters)
             if not isinstance(self.ctx, HostContext) and self._filters:
                 # Post-filtering ONLY when processing data
                 content = AllowFilter.filter_content(content, self._filters)
+            if 'messages' in self.path:
+                log.error('======[CORE DEBUG]====== filters (A): %s', self._filters)
+                log.error('======[CORE DEBUG]====== all messages: %s', len(content))
+                for l in reversed(content):
+                    if ": Configuration file " in l:
+                        log.error('======[CORE DEBUG]====== last: %s', l)
+                        break
             return content
 
     def _stream(self):
