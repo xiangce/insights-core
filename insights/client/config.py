@@ -1,11 +1,15 @@
 from __future__ import absolute_import
-import os
-import logging
+
 import argparse
 import copy
+import logging
+import os
 import six
 import sys
+
 from six.moves import configparser as ConfigParser
+
+from insights.cleaner import DEFAULT_OBFUSCATIONS
 from insights.specs.datasources.manifests import manifests, content_types
 
 try:
@@ -276,20 +280,16 @@ DEFAULT_OPTS = {
         'action': 'store',
     },
     'obfuscate': {
-        # non-CLI
-        'default': False
-    },
-    'obfuscate_ipv6': {
-        # non-CLI
+        # non-CLI, deprecated
         'default': False
     },
     'obfuscate_hostname': {
-        # non-CLI
+        # non-CLI, deprecated
         'default': False
     },
-    'obfuscate_mac': {
+    'obfuscate_opt': {
         # non-CLI
-        'default': False
+        'default': []
     },
     'offline': {
         'default': False,
@@ -681,6 +681,39 @@ class InsightsConfig(object):
         '''
         Make sure there are no conflicting or invalid options
         '''
+
+        def _validate_obfuscate_options():
+            if self.obfuscate or self.obfuscate_hostname:
+                if self._print_errors:
+                    sys.stdout.write(
+                        'WARNING: `obfuscate` and `obfuscate_hostname` are deprecated, please use `obfuscate_opt` instead.\n'
+                    )
+                if self.obfuscate_hostname and not self.obfuscate:
+                    raise ValueError('Option `obfuscate_hostname` requires `obfuscate`')
+                # obfuscate=True and obfuscate_hostname=True/False
+                if self.obfuscate_opt:
+                    raise ValueError('Conflicting options: `obfuscate_opt` and `obfuscate`')
+                # Ture to new option: obfuscate_opt
+                self.obfuscate_opt = ['ipv4']
+                self.obfuscate_opt.append('hostname') if self.obfuscate_hostname else None
+            elif self.obfuscate_opt:
+                obf_opt = self.obfuscate_opt
+                if isinstance(obf_opt, six.string_types):
+                    obf_opt = set(ow.strip() for ow in obf_opt.strip('\'"').split(','))
+                invalid_opt = set(ow for ow in obf_opt if ow not in DEFAULT_OBFUSCATIONS)
+                self.obfuscate_opt = sorted(set(obf_opt) - invalid_opt)
+                if invalid_opt and self._print_errors:
+                    sys.stdout.write(
+                        'WARNING: ignoring invalid obfuscate options: `{0}`, using: "obfuscate_opt={1}"\n'.format(
+                            '`, `'.join(invalid_opt), ','.join(self.obfuscate_opt)
+                        )
+                    )
+            # deprecate old options
+            self.obfuscate = self.obfuscate_hostname = None
+
+        # validate obfuscate options
+        _validate_obfuscate_options()
+
         if self.analyze_image_id:
             raise ValueError('--analyze-image-id is no longer supported.')
         if self.analyze_file:
@@ -693,8 +726,6 @@ class InsightsConfig(object):
             raise ValueError('--use-atomic is no longer supported.')
         if self.use_docker:
             raise ValueError('--use-docker is no longer supported.')
-        if self.obfuscate_hostname and not self.obfuscate:
-            raise ValueError('Option `obfuscate_hostname` requires `obfuscate`')
         if self.enable_schedule and self.disable_schedule:
             raise ValueError('Conflicting options: --enable-schedule and --disable-schedule')
         if self.payload and not self.content_type:
@@ -740,7 +771,7 @@ class InsightsConfig(object):
                 raise ValueError(
                     'Cannot write to %s. %s is not a directory.' % (self.output_dir, parent_dir)
                 )
-            if self.obfuscate:
+            if self.obfuscate_opt:
                 if self._print_errors:
                     sys.stdout.write(
                         'WARNING: Obfuscation reports will be created alongside the output directory.\n'
@@ -763,7 +794,7 @@ class InsightsConfig(object):
                 raise ValueError(
                     'Cannot write to %s. %s is not a directory.' % (self.output_file, parent_dir)
                 )
-            if self.obfuscate:
+            if self.obfuscate_opt:
                 if self._print_errors:
                     sys.stdout.write(
                         'WARNING: Obfuscation reports will be created alongside the output archive.\n'

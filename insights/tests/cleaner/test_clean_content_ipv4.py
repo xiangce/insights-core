@@ -40,8 +40,15 @@ from insights.cleaner import Cleaner
         ),
     ],
 )
-def test_obfuscate_ip_match(line, expected):
-    c = InsightsConfig(obfuscate=True)
+@mark.parametrize(
+    ("obfuscate", "obfuscate_opt"),
+    [
+        (True, []),
+        (False, ['ipv4']),
+    ],
+)
+def test_obfuscate_ipv4_match(obfuscate, obfuscate_opt, line, expected):
+    c = InsightsConfig(obfuscate=obfuscate, obfuscate_opt=obfuscate_opt)
     pp = Cleaner(c, {})
     actual = pp.clean_content(line)
     assert actual == expected
@@ -56,8 +63,15 @@ def test_obfuscate_ip_match(line, expected):
         ),
     ],
 )
-def test_obfuscate_ip_match_IP_overlap(line, expected):
-    c = InsightsConfig(obfuscate=True)
+@mark.parametrize(
+    ("obfuscate", "obfuscate_opt"),
+    [
+        (True, []),
+        (False, ['ipv4']),
+    ],
+)
+def test_obfuscate_ipv4_match_IP_overlap(obfuscate, obfuscate_opt, line, expected):
+    c = InsightsConfig(obfuscate=obfuscate, obfuscate_opt=obfuscate_opt)
     pp = Cleaner(c, {})
     actual = pp.clean_content(line)
     assert actual == expected
@@ -90,8 +104,15 @@ def test_obfuscate_ip_match_IP_overlap(line, expected):
         ),
     ],
 )
-def test_obfuscate_ip_match_IP_overlap_netstat(line, expected):
-    c = InsightsConfig(obfuscate=True)
+@mark.parametrize(
+    ("obfuscate", "obfuscate_opt"),
+    [
+        (True, []),
+        (False, ['ipv4']),
+    ],
+)
+def test_obfuscate_ipv4_match_IP_overlap_netstat(obfuscate, obfuscate_opt, line, expected):
+    c = InsightsConfig(obfuscate=obfuscate, obfuscate_opt=obfuscate_opt)
     pp = Cleaner(c, {})
     actual1 = pp.clean_content(line, width=True)
     assert actual1 == expected
@@ -130,12 +151,19 @@ def test_obfuscate_ip_match_IP_overlap_netstat(line, expected):
         )
     ],
 )
+@mark.parametrize(
+    ("obfuscate", "obfuscate_opt"),
+    [
+        (True, []),
+        (False, ['ipv4']),
+    ],
+)
 @patch("insights.cleaner.ip.IPv4._ip2db", return_value="10.230.230.1")
-def test_obfuscate_ip_false_positive(_ip2db, original, expected):
-    c = InsightsConfig(obfuscate=True)
+def test_obfuscate_ipv4_false_positive(_ip2db, obfuscate, obfuscate_opt, original, expected):
+    c = InsightsConfig(obfuscate=obfuscate, obfuscate_opt=obfuscate_opt)
     pp = Cleaner(c, {})
     actual = pp.clean_content(original)
     assert actual == expected
-    # "no_obfuscate=['ip']
-    actual = pp.clean_content(original, no_obfuscate=['ip'])
+    # "no_obfuscate=['ipv4']
+    actual = pp.clean_content(original, no_obfuscate=['ipv4'])
     assert actual == original
