@@ -15,8 +15,7 @@ Requires: python3
 Requires: python3-redis
 
 %if 0%{?rhel} == 7
-Requires: python36-CacheControl
-Requires: python36-colorama
+#Requires: python36-CacheControl
 Requires: python36-defusedxml
 Requires: python36-jinja2
 Requires: python36-lockfile
@@ -24,8 +23,7 @@ Requires: python36-PyYAML
 Requires: python36-requests
 Requires: python36-six
 %else
-Requires: python3-CacheControl
-Requires: python3-colorama
+#Requires: python3-CacheControl
 Requires: python3-defusedxml
 Requires: python3-jinja2
 Requires: python3-lockfile
@@ -50,4 +48,3 @@ rm -rf $RPM_BUILD_ROOT/usr/bin
 %{python3_sitelib}/*
 
 %changelog
-
