@@ -4,7 +4,7 @@ PYTHON=${1:-python}
 rm -f insights.zip
 rm -rf insights_core.egg-info
 cp MANIFEST.in.client MANIFEST.in
-$PYTHON setup.py egg_info
+$PYTHON -m build
 mkdir -p tmp/EGG-INFO
 cp insights_core.egg-info/* tmp/EGG-INFO
 cp -r insights tmp
