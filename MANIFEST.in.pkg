@@ -1,0 +1,9 @@
+# downstream
+graft insights
+
+prune examples
+prune insights/parsr/examples/tests
+prune insights/parsr/query/tests
+prune insights/parsr/tests
+prune insights/plugins
+prune insights/tests
