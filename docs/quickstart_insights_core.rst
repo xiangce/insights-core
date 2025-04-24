@@ -31,7 +31,7 @@ the following installed:
 * Python PIP
 
 Further requirements can be found in the
-`README.rst <https://github.com/RedHatInsights/insights-core/blob/master/README.rst>`_
+`README.md <https://github.com/RedHatInsights/insights-core/blob/master/README.md>`_
 file associated with the insights-core project.
 
 .. HINT::
@@ -108,7 +108,7 @@ Clone the project::
 Initialize a virtualenv with the ``--system-site-packages`` flag::
 
     [userone@hostone project_dir/insights-core]$ python3.6 -m venv --sytem-site-packages .
-    
+
 Next install the insights-core project and its dependencies into your virtualenv::
 
     (insights-core)[userone@hostone project_dir/insights-core]$ bin/pip install -e .[client-develop]
@@ -136,7 +136,7 @@ Rule Development
 ================
 
 From your project root directory create a directory for your rules::
-    
+
     (insights-core)[userone@hostone project_dir/insights-core]$ cd ..
     (insights-core)[userone@hostone project_dir]$ mkdir myrules
     (insights-core)[userone@hostone project_dir]$ cd myrules
@@ -194,9 +194,9 @@ Create a sample rule called ``hostname_rel.py`` in the ``myrules`` directory:
    `code for hostname_rel.py <https://github.com/RedHatInsights/insights-core/blob/master/examples/rules/hostname_rel.py>`_
 
 Now you can use Insights to evaluate your rule by running your rule script::
-    
+
     (insights-core)[userone@hostone project_dir/myrules]$ python hostname_rel.py
-    
+
 Depending upon the system you are using you will see several lines of
 output ending with your rule results that should look something like this::
 
