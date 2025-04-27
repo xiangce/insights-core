@@ -9,8 +9,7 @@ from pytest import mark
 
 @patch('insights.client.config.ConfigParser.open')
 def test_config_load(open_):
-    open_.return_value = TextIOWrapper(
-        BytesIO(b'[insights-client]\nusername=AMURO'))
+    open_.return_value = TextIOWrapper(BytesIO(b'[insights-client]\nusername=AMURO'))
     c = InsightsConfig()
     c._load_config_file()
     assert c.username == 'AMURO'
@@ -18,8 +17,7 @@ def test_config_load(open_):
 
 @patch('insights.client.config.ConfigParser.open')
 def test_config_load_legacy(open_):
-    open_.return_value = TextIOWrapper(
-        BytesIO(b'[redhat-access-insights]\nusername=BRIGHT'))
+    open_.return_value = TextIOWrapper(BytesIO(b'[redhat-access-insights]\nusername=BRIGHT'))
     c = InsightsConfig()
     c._load_config_file()
     assert c.username == 'BRIGHT'
@@ -28,8 +26,9 @@ def test_config_load_legacy(open_):
 @patch('insights.client.config.ConfigParser.open')
 def test_config_load_legacy_ignored(open_):
     open_.return_value = TextIOWrapper(
-        BytesIO(b'[insights-client]\nusername=CASVAL\n'
-                b'[redhat-access-insights]\nusername=SAYLA'))
+        BytesIO(b'[insights-client]\nusername=CASVAL\n' b'[redhat-access-insights]\nusername=SAYLA')
+    )
+
     c = InsightsConfig()
     c._load_config_file()
     assert c.username == 'CASVAL'
@@ -38,8 +37,7 @@ def test_config_load_legacy_ignored(open_):
 @patch('insights.client.config.ConfigParser.open')
 def test_config_load_section_error(open_):
     # defaults on incorrect conf
-    open_.return_value = TextIOWrapper(
-        BytesIO(b'aFUHAEFJhFhlAFJKhnfjeaf\nusername=RAMBA'))
+    open_.return_value = TextIOWrapper(BytesIO(b'aFUHAEFJhFhlAFJKhnfjeaf\nusername=RAMBA'))
     c = InsightsConfig()
     c._load_config_file()
     assert c.username == DEFAULT_OPTS['username']['default']
@@ -48,8 +46,7 @@ def test_config_load_section_error(open_):
 @patch('insights.client.config.ConfigParser.open')
 def test_config_load_value_error(open_):
     # defaults on incorrect conf
-    open_.return_value = TextIOWrapper(
-        BytesIO(b'[insights-client]\nhttp_timeout=ZGOK'))
+    open_.return_value = TextIOWrapper(BytesIO(b'[insights-client]\nhttp_timeout=ZGOK'))
     c = InsightsConfig()
     c._load_config_file()
     assert c.http_timeout == DEFAULT_OPTS['http_timeout']['default']
@@ -62,11 +59,10 @@ def test_defaults():
     assert isinstance(c.http_timeout, float)
 
 
-@patch('insights.client.config.os.environ', {
-        'INSIGHTS_HTTP_TIMEOUT': '1234',
-        'INSIGHTS_RETRIES': '1234',
-        'INSIGHTS_CMD_TIMEOUT': '1234'
-       })
+@patch(
+    'insights.client.config.os.environ',
+    {'INSIGHTS_HTTP_TIMEOUT': '1234', 'INSIGHTS_RETRIES': '1234', 'INSIGHTS_CMD_TIMEOUT': '1234'},
+)
 def test_env_number_parsing():
     c = InsightsConfig()
     c._load_env()
@@ -75,11 +71,14 @@ def test_env_number_parsing():
     assert isinstance(c.http_timeout, float)
 
 
-@patch('insights.client.config.os.environ', {
+@patch(
+    'insights.client.config.os.environ',
+    {
         'INSIGHTS_HTTP_TIMEOUT': 'STAY AWAY',
         'INSIGHTS_RETRIES': 'FROM ME',
-        'INSIGHTS_CMD_TIMEOUT': 'BICK HAZARD'
-     })
+        'INSIGHTS_CMD_TIMEOUT': 'BICK HAZARD',
+    },
+)
 def test_env_number_bad_values():
     c = InsightsConfig()
     with pytest.raises(ValueError):
@@ -128,13 +127,16 @@ def test_env_https_proxy_no_warning():
 
 
 # empty argv so parse_args isn't polluted with pytest arguments
-@mark.parametrize(("config",), (
-    ({"payload": "./payload.tar.gz", "content_type": "application/gzip"},),
-    ({"diagnosis": True},),
-    ({"compliance": True},),
-    ({"check_results": True},),
-    ({"checkin": True},),
-))
+@mark.parametrize(
+    ("config",),
+    (
+        ({"payload": "./payload.tar.gz", "content_type": "application/gzip"},),
+        ({"diagnosis": True},),
+        ({"compliance": True},),
+        ({"check_results": True},),
+        ({"checkin": True},),
+    ),
+)
 @patch('insights.client.config.sys.argv', [sys.argv[0]])
 def test_implied_non_legacy_upload(config):
     '''
