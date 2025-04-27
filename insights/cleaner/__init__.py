@@ -47,14 +47,7 @@ from insights.util.posix_regex import replace_posix
 
 logger = logging.getLogger(__name__)
 MAX_LINE_LENGTH = 1048576  # 1MB
-DEFAULT_OBFUSCATIONS = {
-    'hostname',
-    'ip',  # ipv4
-    'ipv6',
-    'keyword',
-    'mac',
-    'password',
-}
+DEFAULT_OBFUSCATIONS = { 'hostname', 'ip',  'ipv6', 'keyword', 'mac', 'password', }
 
 
 class Cleaner(object):
