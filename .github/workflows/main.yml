@@ -84,6 +84,7 @@ jobs:
   cote-format:
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v4
     - uses: pre-commit-ci/lite-action@v1.1.0
       if: always()
       with:
