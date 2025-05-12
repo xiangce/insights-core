@@ -31,6 +31,7 @@ class IPv4(object):
 
     def __init__(self):
         # - IP obfuscate information
+        # original ip: obfuscated_ip
         self._ip_db = dict()  # IP database
         self._start_ip = '10.230.230.1'
         self._ignore_list = ["127.0.0.1"]
@@ -49,26 +50,16 @@ class IPv4(object):
         '''
         adds an IP address to the IP database and returns the obfuscated entry, or returns the
         existing obfuscated IP entry
-        FORMAT:
-        {$obfuscated_ip: $original_ip,}
         '''
-        ip_num = self._ip2int(ip)
-        ip_found = False
-        db = self._ip_db
-        for k, v in db.items():
-            if v == ip_num:
-                ret_ip = self._int2ip(k)
-                ip_found = True
-        if ip_found:  # the entry already existed
-            return ret_ip
-        else:  # the entry did not already exist
-            if len(self._ip_db) > 0:
-                new_ip = max(db.keys()) + 1
-            else:
-                new_ip = self._ip2int(self._start_ip)
-            db[new_ip] = ip_num
-
-            return self._int2ip(new_ip)
+        ori_ip_num = self._ip2int(ip)
+        if ori_ip_num in self._ip_db:
+            return self._int2ip(self._ip_db[ori_ip_num])
+        if len(self._ip_db) > 0:
+            new_ip_num = max(self._ip_db.values()) + 1
+        else:
+            new_ip_num = self._ip2int(self._start_ip)
+        self._ip_db[ori_ip_num] = new_ip_num
+        return self._int2ip(new_ip_num)
 
     def parse_line(self, line, **kwargs):
         '''
@@ -132,8 +123,8 @@ class IPv4(object):
 
     def mapping(self):
         mapping = []
-        for k, v in self._ip_db.items():
-            mapping.append({'original': self._int2ip(v), 'obfuscated': self._int2ip(k)})
+        for ori, obf in self._ip_db.items():
+            mapping.append({'original': self._int2ip(ori), 'obfuscated': self._int2ip(obf)})
         return mapping
 
     def generate_report(self, report_dir, archive_name):
@@ -141,8 +132,8 @@ class IPv4(object):
             ip_report_file = os.path.join(report_dir, "%s-ipv4.csv" % archive_name)
             logger.info('Creating IPv4 Report - %s', ip_report_file)
             lines = ['Obfuscated IPv4,Original IPv4']
-            for k, v in self._ip_db.items():
-                lines.append('{0},{1}'.format(self._int2ip(k), self._int2ip(v)))
+            for ori, obf in self._ip_db.items():
+                lines.append('{0},{1}'.format(self._int2ip(obf), self._int2ip(ori)))
         except Exception as e:  # pragma: no cover
             logger.exception(e)
             raise Exception('CreateReport Error: Error Creating IPv4 Report')
