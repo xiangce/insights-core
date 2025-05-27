@@ -5,17 +5,15 @@ import copy
 import logging
 import os
 import six
+import json
 
 from six.moves import configparser as ConfigParser
 
 from insights.cleaner import DEFAULT_OBFUSCATIONS
-from insights.client.utilities import get_rhel_version, get_egg_version_tuple
+from insights.collector.constants import InsightsConstants as constants
+from insights.collector.utilities import verify_permissions, load_yaml, correct_format
 from insights.specs.manifests import manifests, content_types
 
-try:
-    from .constants import InsightsConstants as constants
-except:
-    from constants import InsightsConstants as constants
 
 logger = logging.getLogger(__name__)
 if six.PY2:
@@ -39,6 +37,10 @@ DEFAULT_OPTS = {
         'action': 'store',
         'group': 'actions',
         'dest': 'manifest',
+    },
+    'cmd_timeout': {
+        # non-CLI
+        'default': constants.default_cmd_timeout
     },
     # 'compliance': {
     #     'default': False,
@@ -151,12 +153,9 @@ class InsightsConfig(object):
         self._init_attrs = copy.copy(dir(self))
         self._update_dict(DEFAULT_KVS)
 
+        self.load_all()
         if args:
             self._update_dict(args[0])
-        self._update_dict(kwargs)
-        self._cli_opts = None
-        self._imply_options()
-        self._validate_options()
 
     def __str__(self):
         _str = '    '
@@ -198,70 +197,6 @@ class InsightsConfig(object):
             dict_.pop(u, None)
         self.__dict__.update(dict_)
 
-    def _load_env(self):
-        '''
-        Options can be set as environment variables
-        The formula for the key is `"INSIGHTS_%s" % key.upper()`
-        In English, that's the uppercase version of the config key with
-        "INSIGHTS_" prepended to it.
-        '''
-
-        def _boolify(v):
-            if v.lower() == 'true':
-                return True
-            elif v.lower() == 'false':
-                return False
-            else:
-                return v
-
-        ignore = []
-        insights_env_opts = dict(
-            (k.lower().split("_", 1)[1], _boolify(v))
-            for k, v in os.environ.items()
-            if k.upper().startswith("INSIGHTS_") and k.upper() not in ignore
-        )
-
-        self._update_dict(insights_env_opts)
-
-    def _load_command_line(self, conf_only=False):
-        '''
-        Load config from command line switches.
-        NOTE: Not all config is available on the command line.
-        '''
-        # did we already parse cli (i.e. to get conf file)? don't run twice
-        if self._cli_opts:
-            self._update_dict(self._cli_opts)
-            return
-        parser = argparse.ArgumentParser()
-        arg_groups = {
-            "actions": parser.add_argument_group("actions"),
-            "debug": parser.add_argument_group("optional debug arguments"),
-        }
-        cli_options = dict((k, v) for k, v in DEFAULT_OPTS.items() if ('opt' in v))
-        for _, _o in cli_options.items():
-            # cli_options contains references to DEFAULT_OPTS, so
-            #   make a copy so we don't mutate DEFAULT_OPTS
-            o = copy.copy(_o)
-            group_name = o.pop('group', None)
-            if group_name is None:
-                group = parser
-            else:
-                group = arg_groups[group_name]
-            optnames = o.pop('opt')
-            # use argparse.SUPPRESS as CLI defaults so it won't parse
-            #  options that weren't specified
-            o['default'] = argparse.SUPPRESS
-            group.add_argument(*optnames, **o)
-
-        options = parser.parse_args()
-
-        self._cli_opts = vars(options)
-        if conf_only and 'conf' in self._cli_opts:
-            self._update_dict({'conf': self._cli_opts['conf']})
-            return
-
-        self._update_dict(self._cli_opts)
-
     def _load_config_file(self, fname=constants.default_conf_file):
         '''
         Load config from config file. If fname is not specified,
@@ -285,10 +220,6 @@ class InsightsConfig(object):
             return
         for key in d:
             try:
-                if key == 'retries' or key == 'cmd_timeout':
-                    d[key] = parsedconfig.getint(constants.app_name, key)
-                if key == 'http_timeout':
-                    d[key] = parsedconfig.getfloat(constants.app_name, key)
                 if key in DEFAULT_BOOLS and isinstance(d[key], six.string_types):
                     d[key] = parsedconfig.getboolean(constants.app_name, key)
             except ValueError as e:
@@ -306,8 +237,8 @@ class InsightsConfig(object):
         '''
         # check for custom conf file before loading conf
         self._load_config_file()
-        self._load_env()
-        self._imply_options()
+        # self._imply_options()
+        self.get_redact_conf()
         self._validate_options()
         return self
 
@@ -317,33 +248,6 @@ class InsightsConfig(object):
         '''
 
         def _validate_obfuscation_options():
-            # When old switches are set explicitly, even set as False
-            if self.obfuscate is not None or self.obfuscate_hostname is not None:
-                # Warning deprecation only on RHEL 8+ and from egg v 3.6.0 (planned)
-                if self._print_errors and get_rhel_version() > 7:
-                    if get_egg_version_tuple() >= (3, 6, 0):
-                        logger.warning(
-                            'WARNING: `obfuscate` and `obfuscate_hostname` are deprecated, please use `obfuscation_list` instead.'
-                        )
-                if self.obfuscation_list is not None:
-                    # When BOTH new and old switches are set explicitly
-                    if self._print_errors:
-                        logger.warning(
-                            'WARNING: Conflicting options: `obfuscation_list` and `obfuscate`, using: "obfuscation_list={0}".'.format(
-                                self.obfuscation_list
-                            )
-                        )
-                else:
-                    # Only old switches are set
-                    if self.obfuscate_hostname and not self.obfuscate:
-                        raise ValueError('Option `obfuscate_hostname` requires `obfuscate`')
-                    # Turn old options to new switch obfuscation_list
-                    self.obfuscation_list = list()
-                    self.obfuscation_list.append('ipv4') if self.obfuscate else None
-                    self.obfuscation_list.append('hostname') if self.obfuscate_hostname else None
-                # discard old options
-                self.obfuscate = self.obfuscate_hostname = None
-            # Re-format the new obfuscation_list
             if isinstance(self.obfuscation_list, six.string_types):
                 obf_opt = set(
                     opt.strip() for opt in self.obfuscation_list.strip('\'"').split(',') if opt
@@ -359,99 +263,6 @@ class InsightsConfig(object):
 
         # validate obfuscation options
         _validate_obfuscation_options()
-
-        if self.analyze_image_id:
-            raise ValueError('--analyze-image-id is no longer supported.')
-        if self.analyze_file:
-            raise ValueError('--analyze-file is no longer supported.')
-        if self.analyze_mountpoint:
-            raise ValueError('--analyze-mountpoint is no longer supported.')
-        if self.analyze_container:
-            raise ValueError('--analyze-container is no longer supported.')
-        if self.use_atomic:
-            raise ValueError('--use-atomic is no longer supported.')
-        if self.use_docker:
-            raise ValueError('--use-docker is no longer supported.')
-        if self.enable_schedule and self.disable_schedule:
-            raise ValueError('Conflicting options: --enable-schedule and --disable-schedule')
-        if self.payload and not self.content_type:
-            raise ValueError('--payload requires --content-type')
-        if self.offline:
-            if self.to_json:
-                raise ValueError('Cannot use --to-json in offline mode.')
-            if self.status:
-                raise ValueError('Cannot check registration status in offline mode.')
-            if self.test_connection:
-                raise ValueError('Cannot run connection test in offline mode.')
-            if self.checkin:
-                raise ValueError('Cannot check-in in offline mode.')
-            if self.unregister:
-                raise ValueError('Cannot unregister in offline mode.')
-            if self.check_results:
-                raise ValueError('Cannot check results in offline mode')
-            if self.diagnosis:
-                raise ValueError('Cannot diagnosis in offline mode')
-        if self.output_dir and self.output_file:
-            raise ValueError('Specify only one: --output-dir or --output-file.')
-        if self.output_dir == '':
-            # make sure an empty string is not given
-            raise ValueError('--output-dir cannot be empty')
-        if self.output_file == '':
-            # make sure an empty string is not given
-            raise ValueError('--output-file cannot be empty')
-        if self.output_dir:
-            if os.path.exists(self.output_dir):
-                if os.path.isfile(self.output_dir):
-                    raise ValueError('%s is a file.' % self.output_dir)
-                if os.listdir(self.output_dir):
-                    raise ValueError(
-                        'Directory %s already exists and is not empty.' % self.output_dir
-                    )
-            parent_dir = os.path.dirname(self.output_dir.rstrip('/'))
-            if not os.path.exists(parent_dir):
-                raise ValueError(
-                    'Cannot write to %s. Parent directory %s does not exist.'
-                    % (self.output_dir, parent_dir)
-                )
-            if not os.path.isdir(parent_dir):
-                raise ValueError(
-                    'Cannot write to %s. %s is not a directory.' % (self.output_dir, parent_dir)
-                )
-            if self.obfuscation_list:
-                if self._print_errors:
-                    logger.warning(
-                        'WARNING: Obfuscation reports will be created alongside the output directory.'
-                    )
-        if self.core_collect is False:
-            if self._print_errors:
-                logger.warning(
-                    'WARNING: "core_collect=False" is no longer supported. "core_collect=True" will be used.'
-                )
-        if self.output_file:
-            if os.path.exists(self.output_file):
-                raise ValueError('File %s already exists.' % self.output_file)
-            parent_dir = os.path.dirname(self.output_file.rstrip('/'))
-            if not os.path.exists(parent_dir):
-                raise ValueError(
-                    'Cannot write to %s. Parent directory %s does not exist.'
-                    % (self.output_file, parent_dir)
-                )
-            if not os.path.isdir(parent_dir):
-                raise ValueError(
-                    'Cannot write to %s. %s is not a directory.' % (self.output_file, parent_dir)
-                )
-            if self.obfuscation_list:
-                if self._print_errors:
-                    logger.warning(
-                        'WARNING: Obfuscation reports will be created alongside the output archive.'
-                    )
-        if self.module and not self.module.startswith('insights.client.apps.'):
-            raise ValueError('You can only run modules within the namespace insights.client.apps.*')
-        if self.app and not self.manifest:
-            raise ValueError(
-                "Unable to find app: %s\nList of available apps: %s"
-                % (self.app, ', '.join(sorted(manifests.keys())))
-            )
 
     def _imply_options(self):
         '''
@@ -599,6 +410,88 @@ class InsightsConfig(object):
         #   set the filename from the given
         #   compressor
         self.output_file = self.output_file + _tar_ext(self.compressor)
+
+    def load_redaction_file(self, fname):
+        '''
+        Load the YAML-style file-redaction.yaml
+            or file-content-redaction.yaml files
+        '''
+        if fname not in (self.redaction_file, self.content_redaction_file):
+            # invalid function use, should never get here in a production situation
+            return None
+        if not fname:
+            # no filename defined, return nothing
+            logger.debug('redaction_file or content_redaction_file is undefined')
+            return None
+        if not fname or not os.path.isfile(fname):
+            if fname == self.redaction_file:
+                logger.debug(
+                    '%s not found. No files or commands will be skipped.', self.redaction_file
+                )
+            elif fname == self.content_redaction_file:
+                logger.debug(
+                    '%s not found. '
+                    'No patterns will be skipped and no keyword obfuscation will occur.',
+                    self.content_redaction_file,
+                )
+            return None
+        try:
+            verify_permissions(fname)
+        except RuntimeError as e:
+            if self.config.validate:
+                # exit if permissions invalid and using --validate
+                raise RuntimeError('ERROR: %s' % e)
+            logger.warning('WARNING: %s', e)
+        loaded = load_yaml(fname)
+        if fname == self.redaction_file:
+            err, msg = correct_format(loaded, ('commands', 'files', 'components'), fname)
+        elif fname == self.content_redaction_file:
+            err, msg = correct_format(loaded, ('patterns', 'keywords'), fname)
+        if err:
+            # YAML is correct but doesn't match the format we need
+            raise RuntimeError('ERROR: ' + msg)
+        return loaded
+
+    def get_redact_conf(self):
+        '''
+        Try to load the the "new" version of
+        remove.conf (file-redaction.yaml and file-content-redaction.yaml)
+        '''
+        rm_conf = {}
+        redact_conf = self.load_redaction_file(self.redaction_file)
+        content_redact_conf = self.load_redaction_file(self.content_redaction_file)
+
+        rm_conf.update(redact_conf or {})
+        rm_conf.update(content_redact_conf or {})
+        # remove Nones, empty strings, and empty lists
+        self.redact_conf = dict((k, v) for k, v in rm_conf.items() if v)
+
+        if self.redact_conf and (
+            '/etc/insights-client/machine-id' in self.redact_conf.get('files', [])
+            or 'insights.specs.default.DefaultSpecs.machine_id'
+            in self.redact_conf.get('components', [])
+        ):
+            logger.warning(
+                "WARNING: Spec machine_id will be skipped for redaction; as it would cause issues, please remove it from %s.",
+                self.redaction_file,
+            )
+        # return the RAW rm_conf
+        return self.redact_conf
+
+    def validate(self):
+        '''
+        Validate remove.conf and tags.conf
+        '''
+        self.get_tags_conf()
+        success = self.get_rm_conf()
+        if not success:
+            logger.info('No contents in the blacklist configuration to validate.')
+            return None
+        # Using print here as this could contain sensitive information
+        print('Blacklist configuration parsed contents:')
+        print(json.dumps(success, indent=4))
+        logger.info('Parsed successfully.')
+        return True
 
 
 if __name__ == '__main__':

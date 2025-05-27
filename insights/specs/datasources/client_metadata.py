@@ -10,18 +10,12 @@ import yaml
 from itertools import chain
 
 from insights import package_info
-from insights.client.constants import InsightsConstants as constants
+from insights.collector.constants import InsightsConstants as constants
 from insights.core.blacklist import BLACKLISTED_SPECS
 from insights.core.context import HostContext
 from insights.core.exceptions import SkipComponent, ContentException
 from insights.core.plugins import datasource
 from insights.core.spec_factory import DatasourceProvider
-
-try:
-    from insights_client.constants import InsightsConstants as wrapper_constants
-except ImportError:
-    wrapper_constants = None
-
 
 logger = logging.getLogger(__name__)
 
@@ -271,15 +265,10 @@ def version_info(broker):
     Returns:
         str: The JSON strings of version info
     """
-    try:
-        client_version = wrapper_constants.version
-    except AttributeError:
-        client_version = None
-
     version_info = {}
     version_info['core_version'] = '{0}-{1}'.format(
         package_info['VERSION'], package_info['RELEASE']
     )
-    version_info['client_version'] = client_version
+    version_info['client_version'] = None  # FIXME
 
     return DatasourceProvider(content=json.dumps(version_info), relative_path='version_info')

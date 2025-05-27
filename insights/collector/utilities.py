@@ -3,42 +3,36 @@ Utility functions
 """
 
 from __future__ import absolute_import
-import glob
-import os
-import logging
-import uuid
 import datetime
+import errno
+import json
+import logging
+import os
 import shlex
-import re
+import six
+import stat
 import sys
+import tarfile
 import threading
 import time
-import json
-import tarfile
-import errno
-from subprocess import Popen, PIPE, STDOUT
-
+import uuid
 import yaml
+
+from subprocess import Popen, PIPE, STDOUT
 
 try:
     from yaml import CDumper as Dumper
 except ImportError:
     from yaml import Dumper
 
-from .. import package_info
-from .constants import InsightsConstants as constants
-from .collection_rules import InsightsUploadConf, load_yaml
-from insights.client import cert_auth
+from insights import package_info
+from insights.collector import cert_auth
+from insights.collector.constants import InsightsConstants as constants
 
 from insights.core.context import Context
 from insights.parsers.os_release import OsRelease
 from insights.parsers.redhat_release import RedhatRelease
 from insights.util.hostname import determine_hostname  # noqa: F401
-
-try:
-    from insights_client.constants import InsightsConstants as wrapper_constants
-except ImportError:
-    wrapper_constants = None
 
 logger = logging.getLogger(__name__)
 
@@ -47,48 +41,66 @@ def get_time():
     return datetime.datetime.isoformat(datetime.datetime.now())
 
 
-def write_registered_file():
-    delete_unregistered_file()
-    for f in constants.registered_files:
-        if os.path.lexists(f):
-            if os.path.islink(f):
-                # kill symlinks and regenerate
-                os.remove(f)
-                write_to_disk(f)
-        else:
-            write_to_disk(f)
+def correct_format(parsed_data, expected_keys, filename):
+    '''
+    Ensure the parsed file matches the needed format
+    Returns True, <message> on error
+    Returns False, None on success
+    '''
+
+    # validate keys are what we expect
+    def is_list_of_strings(data):
+        '''
+        Helper function for correct_format()
+        '''
+        if data is None:
+            # nonetype, no data to parse. treat as empty list
+            return True
+        if not isinstance(data, list):
+            return False
+        for l in data:
+            if not isinstance(l, six.string_types):
+                return False
+        return True
+
+    keys = parsed_data.keys()
+    invalid_keys = set(keys).difference(expected_keys)
+    if invalid_keys:
+        return True, (
+            'Unknown section(s) in %s: ' % filename
+            + ', '.join(invalid_keys)
+            + '\nValid sections are '
+            + ', '.join(expected_keys)
+            + '.'
+        )
+
+    # validate format (lists of strings)
+    for k in expected_keys:
+        if k in parsed_data:
+            if k == 'patterns' and isinstance(parsed_data['patterns'], dict):
+                if 'regex' not in parsed_data['patterns']:
+                    return (
+                        True,
+                        'Patterns section contains an object but the "regex" key was not specified.',
+                    )
+                if 'regex' in parsed_data['patterns'] and len(parsed_data['patterns']) > 1:
+                    return True, 'Unknown keys in the patterns section. Only "regex" is valid.'
+                if not is_list_of_strings(parsed_data['patterns']['regex']):
+                    return True, 'regex section under patterns must be a list of strings.'
+                continue
+            if not is_list_of_strings(parsed_data[k]):
+                return True, '%s section must be a list of strings.' % k
+    return False, None
 
 
-def write_unregistered_file(date=None):
-    """
-    Write .unregistered out to disk
-    """
-    delete_registered_file()
-    if date is None:
-        date = get_time()
-    for f in constants.unregistered_files:
-        if os.path.lexists(f):
-            if os.path.islink(f):
-                # kill symlinks and regenerate
-                os.remove(f)
-                write_to_disk(f, content=str(date))
-        else:
-            write_to_disk(f, content=str(date))
-
-
-def delete_registered_file():
-    for f in constants.registered_files:
-        write_to_disk(f, delete=True)
-
-
-def delete_unregistered_file():
-    for f in constants.unregistered_files:
-        write_to_disk(f, delete=True)
-
-
-def delete_cache_files():
-    for f in glob.glob(os.path.join(constants.insights_core_lib_dir, "*.json")):
-        os.remove(f)
+def verify_permissions(f):
+    '''
+    Verify 600 permissions on a file
+    '''
+    mode = stat.S_IMODE(os.stat(f).st_mode)
+    if not mode == 0o600:
+        raise RuntimeError("Invalid permissions on %s. " "Expected 0600 got %s" % (f, oct(mode)))
+    logger.debug("Correct file permissions on %s", f)
 
 
 def write_to_disk(filename, delete=False, content=None):
@@ -115,25 +127,6 @@ def write_to_disk(filename, delete=False, content=None):
         logger.debug("Writing '%s'" % filename)
         with open(filename, 'wb') as f:
             f.write(content.encode('utf-8'))
-
-
-def _get_rhsm_identity():
-    """Get the subscription-manager identity certificate UUID.
-
-    :returns: The subscription-manager UUID, or None if not found.
-    :rtype: str | None
-    """
-    if cert_auth.RHSM_CONFIG is None:
-        return None
-
-    try:
-        cert = cert_auth.rhsmCertificate.read()  # type: cert_auth.rhsmCertificate
-        subscription_manager_uuid = cert.getConsumerId()  # type: str
-    except Exception:
-        return None
-
-    logger.debug("Found subscription-manager UUID in '%s/%s'.", cert.PATH, cert.CERT)
-    return subscription_manager_uuid
 
 
 def generate_machine_id(new=False, destination_file=constants.machine_id_file):
@@ -185,33 +178,6 @@ def machine_id_exists(destination_file=constants.machine_id_file):
     return os.path.isfile(destination_file)
 
 
-def _expand_paths(path):
-    """
-    Expand wildcarded paths
-    """
-    dir_name = os.path.dirname(path)
-    paths = []
-    logger.debug("Attempting to expand %s", path)
-    if os.path.isdir(dir_name):
-        files = os.listdir(dir_name)
-        match = os.path.basename(path)
-        for file_path in files:
-            if re.match(match, file_path):
-                expanded_path = os.path.join(dir_name, file_path)
-                paths.append(expanded_path)
-        logger.debug("Expanded paths %s", paths)
-        return paths
-    else:
-        logger.debug("Could not expand %s", path)
-
-
-def validate_remove_file(config):
-    """
-    Validate the remove file and tags file
-    """
-    return InsightsUploadConf(config).validate()
-
-
 def write_data_to_file(data, filepath):
     '''
     Write data to file
@@ -224,17 +190,23 @@ def write_data_to_file(data, filepath):
     write_to_disk(filepath, content=data)
 
 
-def magic_plan_b(filename):
-    '''
-    Use this in instances where
-    python-magic is MIA and can't be installed
-    for whatever reason
-    '''
-    cmd = shlex.split('file --mime-type --mime-encoding ' + filename)
-    stdout, stderr = Popen(cmd, stdout=PIPE).communicate()
-    stdout = stdout.decode("utf-8")
-    mime_str = stdout.split(filename + ': ')[1].strip()
-    return mime_str
+def _get_rhsm_identity():
+    """Get the subscription-manager identity certificate UUID.
+
+    :returns: The subscription-manager UUID, or None if not found.
+    :rtype: str | None
+    """
+    if cert_auth.RHSM_CONFIG is None:
+        return None
+
+    try:
+        cert = cert_auth.rhsmCertificate.read()  # type: cert_auth.rhsmCertificate
+        subscription_manager_uuid = cert.getConsumerId()  # type: str
+    except Exception:
+        return None
+
+    logger.debug("Found subscription-manager UUID in '%s/%s'.", cert.PATH, cert.CERT)
+    return subscription_manager_uuid
 
 
 def run_command_get_output(cmd):
@@ -260,14 +232,9 @@ def get_version_info():
     '''
     Get the insights client and core versions for archival
     '''
-    try:
-        client_version = wrapper_constants.version
-    except AttributeError:
-        # wrapper_constants is None or has no attribute "version"
-        client_version = None
     version_info = {}
     version_info['core_version'] = '%s-%s' % (package_info['VERSION'], package_info['RELEASE'])
-    version_info['client_version'] = client_version
+    version_info['client_version'] = None
     return version_info
 
 
@@ -386,6 +353,27 @@ def systemd_notify_init_thread():
     sdnotify_thread = threading.Thread(target=_sdnotify_loop, args=())
     sdnotify_thread.daemon = True
     sdnotify_thread.start()
+
+
+def load_yaml(filename):
+    try:
+        with open(filename) as f:
+            loaded_yaml = yaml.safe_load(f)
+        if loaded_yaml is None:
+            logger.debug('%s is empty.', filename)
+            return {}
+    except (yaml.YAMLError, yaml.parser.ParserError) as e:
+        # can't parse yaml from conf
+        raise RuntimeError(
+            'ERROR: Cannot parse %s.\n'
+            'If using any YAML tokens such as [] in an expression, '
+            'be sure to wrap the expression in quotation marks.\n\nError details:\n%s\n'
+            % (filename, e)
+        )
+    if not isinstance(loaded_yaml, dict):
+        # loaded data should be a dict with at least one key
+        raise RuntimeError('ERROR: Invalid YAML loaded.')
+    return loaded_yaml
 
 
 def get_tags(tags_file_path=constants.default_tags_file):

@@ -1,730 +1,358 @@
-import errno
-import json
-import os
+#!/usr/bin/env python
+"""
+This module runs insights and serializes the results into a directory. It is
+configurable with a yaml manifest that specifies what to load, what to run,
+and what to serialize. If a manifest isn't provided, a default one is used that
+runs all datasources in ``insights.specs.Specs`` and
+``insights.specs.default.DefaultSpecs`` and saves all datasources in
+``insights.specs.Specs``.
+"""
+from __future__ import print_function
+
+import argparse
 import logging
-import tempfile
-import shutil
+import os
 import sys
-import atexit
-from requests import ConnectionError
+import tempfile
+import yaml
+import uuid
 
-from .. import package_info
-from . import client
-from . import crypto
-from .constants import InsightsConstants as constants
-from .config import InsightsConfig
-from .auto_config import autoconfigure_network
-from .utilities import (
-    write_data_to_file,
-    write_to_disk,
-    get_tags,
-    write_tags,
-    migrate_tags,
-    get_rhel_version,
-    get_parent_process,
-)
+from datetime import datetime
 
-NETWORK = constants.custom_network_log_level
-logger = logging.getLogger(__name__)
+from insights import apply_configs, apply_default_enabled, get_pool
+from insights.cleaner import Cleaner
+from insights.collector.config import InsightsConfig
+from insights.core import blacklist, dr, filters
+from insights.core.serde import Hydration
+from insights.core.spec_factory import SAFE_ENV
+from insights.specs.manifests import manifests
+from insights.util import fs, utc
+from insights.util.hostname import determine_hostname
+from insights.util.subproc import call
+
+log = logging.getLogger(__name__)
+
+EXCEPTIONS_TO_REPORT = set([OSError])
+"""Exception types that should be reported on after core collection."""
 
 
-class InsightsClient(object):
+def load_manifest(data):
+    """Helper for loading a manifest yaml doc."""
+    if isinstance(data, dict):
+        return data
+    if os.path.isfile(data):
+        with open(data, 'r') as f:
+            doc = yaml.safe_load(f)
+    else:
+        doc = yaml.safe_load(data)
+    if not isinstance(doc, dict):
+        raise Exception("Manifest didn't result in dict.")
+    return doc
 
-    def __init__(self, config=None, from_phase=True, **kwargs):
-        """
-        The Insights client interface
-        """
-        if config is None:
-            # initialize with default config if not specified with one
-            self.config = InsightsConfig()
-        else:
-            # BEGIN small hack to maintain compatibility with RPM wrapper:
-            #   wrapper calls with bool second arg so be smart about it
-            if isinstance(config, InsightsConfig):
-                self.config = config
+
+def load_packages(pkgs):
+    for p in pkgs:
+        dr.load_components(p, continue_on_error=False)
+
+
+def apply_blacklist(cfg):
+
+    def _skip_component(component):
+        dr.set_enabled(component, enabled=False)
+        blacklist.BLACKLISTED_SPECS.append(component.split('.')[-1])
+        log.warning('WARNING: Skipping component: %s' % component)
+
+    def _check_and_skip_component(name):
+        def _isidentifier(name):
+            if hasattr(str, 'isidentifier'):
+                return name.isidentifier()
             else:
-                try:
-                    self.config = InsightsConfig(_print_errors=True).load_all()
-                except ValueError as e:
-                    sys.stderr.write('ERROR: ' + str(e) + '\n')
-                    sys.exit(constants.sig_kill_bad)
-            # END hack. in the future, just set self.config=config
+                return not any(it in name for it in ('/', ' ', '.', '-'))
 
-        if from_phase:
-            _init_client_config_dirs()
-            self.set_up_logging()
-            logger.debug(
-                "path={path}, version={version}, phase={phase}, arguments={arguments}".format(
-                    path=client.__file__,
-                    version=package_info.get("VERSION", "unknown"),
-                    phase=os.getenv("INSIGHTS_PHASE", "unknown"),
-                    arguments=" ".join(sys.argv[1:]),
-                )
-            )
-            autoconfigure_network(self.config)
-            self.initialize_tags()
-        else:  # from wrapper
-            _write_pid_files()
-
-        # setup insights connection placeholder
-        # used for requests
-        self.connection = None
-        self.tmpdir = None
-
-    def _net(func):
-        def _init_connection(self, *args, **kwargs):
-            # setup a request session
-            if not self.config.offline and not self.connection:
-                self.connection = client.get_connection(self.config)
-            return func(self, *args, **kwargs)
-
-        return _init_connection
-
-    def get_conf(self):
-        # need this getter to maintain compatability with RPM wrapper
-        return self.config
-
-    def set_up_logging(self):
-        return client.set_up_logging(self.config)
-
-    def version(self):
-        return "%s-%s" % (package_info["VERSION"], package_info["RELEASE"])
-
-    @_net
-    def test_connection(self):
-        """
-        returns (int): 0 if success 1 if failure
-        """
-        return self.connection.test_connection()
-
-    @_net
-    def branch_info(self):
-        """
-        returns (dict): {'remote_leaf': -1, 'remote_branch': -1}
-        """
-        return client.get_branch_info(self.config, self.connection)
-
-    @_net
-    def get_egg_url(self):
-        """
-        Get the proper url based on the configured egg release branch
-        """
-        if self.config.legacy_upload:
-            url = self.connection.base_url + '/platform' + constants.module_router_path
-        else:
-            url = self.connection.base_url + constants.module_router_path
-        try:
-            response = self.connection.get(url)
-            if response.status_code == 200:
-                if 'application/json' not in response.headers.get('Content-Type', ''):
-                    logger.warning(
-                        "Module update router response is not valid for %s. Expected json format but got %s. Defaulting to /release",
-                        url,
-                        response.headers.get('Content-Type', ''),
-                    )
-                    return '/release'
-                return response.json()["url"]
-            else:
-                raise ConnectionError("%s: %s" % (response.status_code, response.reason))
-        except ConnectionError as e:
-            logger.debug("Unable to fetch egg url %s: %s. Defaulting to /release", url, str(e))
-            return '/release'
-
-    def fetch(self, force=False):
-        """
-        returns (dict): {'core': path to new egg, None if no update,
-                         'gpg_sig': path to new sig, None if no update}
-        """
-        self.tmpdir = tempfile.mkdtemp()
-        atexit.register(self.delete_tmpdir)
-        try:
-            rhel_major = get_rhel_version()
-            # set egg name as 'insights-core.el#.egg' per RHEL #
-            egg_name = 'insights-core.el{0}.egg'.format(rhel_major)
-        except Exception:
-            # set default egg as 'insights-core.egg'
-            egg_name = 'insights-core.egg'
-
-        fetch_results = {
-            'core': os.path.join(self.tmpdir, egg_name),
-            'gpg_sig': os.path.join(self.tmpdir, '{0}.asc'.format(egg_name)),
-        }
-
-        logger.debug("Beginning core fetch.")
-
-        # guess the URLs based on what legacy setting is
-        egg_release = self.get_egg_url()
-
-        try:
-            # write the release path to temp so we can collect it
-            #   in the archive
-            write_data_to_file(egg_release, constants.egg_release_file)
-        except (OSError, IOError) as e:
-            logger.debug('Could not write egg release file: %s', str(e))
-
-        egg_url = self.config.egg_path
-        egg_gpg_url = self.config.egg_gpg_path
-        if egg_url is None:
-            egg_url = '/v1/static{0}/{1}'.format(egg_release, egg_name)
-            # if self.config.legacy_upload:
-            #     egg_url = '/v1/static/core/insights-core.egg'
-            # else:
-            #     egg_url = '/static/insights-core.egg'
-        if egg_gpg_url is None:
-            egg_gpg_url = '/v1/static{0}/{1}.asc'.format(egg_release, egg_name)
-            # if self.config.legacy_upload:
-            #     egg_gpg_url = '/v1/static/core/insights-core.egg.asc'
-            # else:
-            #     egg_gpg_url = '/static/insights-core.egg.asc'
-        # run fetch for egg
-        updated = self._fetch(egg_url, constants.core_etag_file, fetch_results['core'], force)
-
-        # if new core was fetched, get new core sig
-        if updated:
-            logger.debug("New core was fetched.")
-            logger.debug("Beginning fetch for core gpg signature.")
-            self._fetch(
-                egg_gpg_url, constants.core_gpg_sig_etag_file, fetch_results['gpg_sig'], force
-            )
-
-            return fetch_results
-
-    @_net
-    def _fetch(self, path, etag_file, target_path, force):
-        """
-        returns (str): path to new egg. None if no update.
-        """
-        # Searched for cached etag information
-        current_etag = None
-        if os.path.isfile(etag_file):
-            with open(etag_file, 'r') as fp:
-                current_etag = fp.read().strip()
-                logger.debug('Found etag %s', current_etag)
-
-        # it's only temporary. I promise. this is the worst timeline
-        # all for a phone popup
-        if self.config.legacy_upload:
-            url = self.connection.base_url + path
-            # verify = self.config.cert_verify
-        else:
-            url = self.connection.base_url.split('/platform')[0] + path
-            # if self.config.cert_verify is True:
-            #     # dont overwrite satellite cert
-            #     self.cert_verify = os.path.join(
-            #         constants.default_conf_dir,
-            #         'cert-api.access.redhat.com.pem')
-
-        # Setup the new request for core retrieval
-        logger.debug('Making request to %s for new core', url)
-
-        # If the etag was found and we are not force fetching
-        # Then add it to the request
-        logger.log(NETWORK, "GET %s", url)
-        try:
-            if current_etag and not force:
-                logger.debug('Requesting new file with etag %s', current_etag)
-                etag_headers = {'If-None-Match': current_etag}
-                response = self.connection.get(url, headers=etag_headers, log_response_text=False)
-            else:
-                logger.debug('Found no etag or forcing fetch')
-                response = self.connection.get(url, log_response_text=False)
-        except ConnectionError as e:
-            logger.error(e)
-            logger.error('The Insights API could not be reached.')
+        if not _isidentifier(name):
+            # not symbolic name
             return False
-
-        # Debug information
-        logger.debug('Status code: %d', response.status_code)
-        for header, value in response.headers.items():
-            logger.debug('%s: %s', header, value)
-
-        # Debug the ETag
-        logger.debug('ETag: %s', response.request.headers.get('If-None-Match'))
-
-        # If data was received, write the new egg and etag
-        if response.status_code == 200 and len(response.content) > 0:
-
-            # Write the new core
-            with open(target_path, 'wb') as handle:
-                logger.debug('Data received, writing core to %s', target_path)
-                handle.write(response.content)
-
-            # Write the new etag
-            with open(etag_file, 'w') as handle:
-                logger.debug('Caching etag to %s', etag_file)
-                handle.write(response.headers['etag'])
-
+        # like a symbolic name
+        component = 'insights.specs.default.DefaultSpecs.{0}'.format(name)
+        if dr.get_component_by_name(component):
+            # is a sybmolic name
+            _skip_component(component)
             return True
+        # not symbolic name
+        return False
 
-        # Received a 304 not modified
-        # Return nothing
-        elif response.status_code == 304:
-            logger.debug('No data received')
-            logger.debug('Tags match, not updating core')
+    for fil in cfg.get("files", []):
+        if not _check_and_skip_component(fil):
+            blacklist.add_file(fil)
 
-        # Something unexpected received
+    for cmd in cfg.get("commands", []):
+        if not _check_and_skip_component(cmd):
+            blacklist.add_command(cmd)
+
+    for component in cfg.get('components', []):
+        if not dr.get_component_by_name(component):
+            log.warning('WARNING: Unknown component in blacklist: %s' % component)
         else:
-            logger.debug('Received Code %s', response.status_code)
-            logger.debug('Not writing new core, or updating etag')
-            logger.debug('Please check config, error reaching %s', url)
+            _skip_component(component)
 
-    def update(self):
-        # dont update if running in offline mode
-        if self.config.offline:
-            logger.debug("Not updating Core. Running in offline mode.")
-            return True
+    if cfg.get('patterns'):
+        log.warning("WARNING: Excluding patterns defined in blacklist configuration")
 
-        if self.config.auto_update:
-            logger.debug("Egg update enabled")
-            # fetch the new eggs and gpg
-            egg_paths = self.fetch()
+    if cfg.get('keywords'):
+        log.warning("WARNING: Replacing keywords defined in blacklist configuration")
 
-            # if the gpg checks out install it
-            if egg_paths and self.verify(egg_paths['core'])['gpg']:
-                return self.install(egg_paths['core'], egg_paths['gpg_sig'])
+
+def create_context(ctx):
+    """
+    Loads and constructs the specified context with the specified arguments.
+    If a '.' isn't in the class name, the 'insights.core.context' package is
+    assumed.
+    """
+    ctx_cls_name = ctx.get("class", "insights.core.context.HostContext")
+    if "." not in ctx_cls_name:
+        ctx_cls_name = "insights.core.context." + ctx_cls_name
+    ctx_cls = dr.get_component(ctx_cls_name)
+    ctx_args = ctx.get("args", {})
+    return ctx_cls(**ctx_args)
+
+
+def get_to_persist(persisters):
+    """
+    Given a specification of what to persist, generates the corresponding set
+    of components.
+    """
+
+    def specs():
+        for p in persisters:
+            if isinstance(p, dict):
+                yield p["name"], p.get("enabled", True)
             else:
-                return False
-        else:
-            logger.debug("Egg update disabled")
+                yield p, True
 
-    def verify(self, egg_path):
-        """
-        Verifies the GPG signature of the egg.  The signature is assumed to
-        be in the same directory as the egg and named the same as the egg
-        except with an additional ".asc" extension.
+    components = sorted(dr.DELEGATES, key=dr.get_name)
+    names = dict((c, dr.get_name(c)) for c in components)
 
-        returns (dict): {'gpg': if the egg checks out,
-                         'stderr': error message if present,
-                         'stdout': stdout,
-                         'rc': return code}
-        """
-        # check if the provided files (egg and gpg) actually exist
-        if egg_path and not os.path.isfile(egg_path):
-            the_message = "Provided egg path %s does not exist, cannot verify." % (egg_path)
-            logger.debug(the_message)
-            return {
-                'gpg': False,
-                'stderr': the_message,
-                'stdout': the_message,
-                'rc': 1,
-                'message': the_message,
-            }
+    results = set()
+    for p, e in specs():
+        for c in components:
+            if names[c].startswith(p):
+                if e:
+                    results.add(c)
+                elif c in results:
+                    results.remove(c)
+    return results
 
-        # if we are running in no_gpg or not gpg mode then return true
-        if not self.config.gpg:
-            return {
-                'gpg': True,
-                'stderr': None,
-                'stdout': None,
-                'rc': 0,
-            }
 
-        # if a valid egg path and gpg were received do the verification
-        if egg_path:
-            result = crypto.verify_gpg_signed_file(
-                file=egg_path,
-                signature=egg_path + ".asc",
-                key=constants.pub_gpg_path,
-            )
-            return {
-                'gpg': result.ok,
-                'rc': result.return_code,
-                'stdout': result.stdout,
-                'stderr': result.stderr,
-            }
+def create_archive(path, remove_path=True):
+    """
+    Creates a tar.gz of the path using the path basename + "tar.gz"
+    The resulting file is in the parent directory of the original path, and
+    the original path is removed.
+    """
+    root_path = os.path.dirname(path)
+    relative_path = os.path.basename(path)
+    archive_path = path + ".tar.gz"
 
-        return {
-            'gpg': False,
-            'stderr': 'Must specify a valid core and gpg key.',
-            'stdout': 'Must specify a valid core and gpg key.',
-            'rc': 1,
-        }
+    cmd = [["tar", "-C", root_path, "-czf", archive_path, relative_path]]
+    call(cmd, env=SAFE_ENV)
+    if remove_path:
+        fs.remove(path)
+    return archive_path
 
-    def install(self, new_egg, new_egg_gpg_sig):
-        """
-        returns (dict): {'success': True if the core installation successfull else False}
-        raises OSError if cannot create /var/lib/insights
-        raises IOError if cannot copy /tmp/insights-core.egg to /var/lib/insights/newest.egg
-        """
 
-        # make sure a valid egg was provided
-        if not new_egg:
-            the_message = 'Must provide a valid Core installation path.'
-            logger.debug(the_message)
-            return {'success': False, 'message': the_message}
+def generate_archive_name(config):
+    """
+    Creates the archive directory to store the component output.
+    """
+    obfuscated = config.obfuscation_list or []
+    time_now = datetime.now(utc).strftime("%Y%m%d%H%M%S")
+    if 'hostname' in obfuscated:
+        # insights-YYYYmmddHHMMSS-dddddd
+        return "insights-{0}-{1}".format(time_now, uuid.uuid4().hex[:6])
+    else:
+        # insights-hostname-YYYYmmddHHMMSS
+        return "insights-{0}-{1}".format(determine_hostname(), time_now)
 
-        # if running in gpg mode, check for valid sig
-        if self.config.gpg and new_egg_gpg_sig is None:
-            the_message = "Must provide a valid Core GPG installation path."
-            logger.debug(the_message)
-            return {'success': False, 'message': the_message}
 
-        # debug
-        logger.debug("Installing the new Core %s", new_egg)
-        if self.config.gpg:
-            logger.debug("Installing the new Core GPG Sig %s", new_egg_gpg_sig)
+def collect(
+    client_config=None,
+    output_dir=None,
+    archive_name=None,
+    compress=False,
+    manifest=None,
+):
+    """
+    This is the collection entry point. It accepts a manifest, a temporary
+    directory in which to store output, and a boolean for optional compression.
 
-        # Make sure /var/lib/insights exists
+    Args:
+        output_dir(str): The temporary directory that is used to create a
+            working directory for storing the final tar.gz if one is generated.
+        archive_name (str): The directory that is used to generate the output
+            as well as the final tar.gz.
+        client_config (InsightsConfig): Configurations read from insights-client
+            configuration, including "manifest".
+        compress (boolean): True to create a tar.gz and remove the original
+            workspace containing output. False to leave the workspace without
+            creating a tar.gz
+        manifest (str or dict): json document or dictionary containing the
+            collection manifest. See default_manifest for an example.  This
+            option works only for `insights-collect` where 'client_config'
+            is not filled.
+
+    Returns:
+        (str, dict): The full path to the created tar.gz or workspace.
+        And a dictionary with relevant exceptions captured by the broker during
+        core collection, this dictionary has the following structure:
+        ``{ exception_type: [ (exception_obj, component), (exception_obj, component) ]}``.
+    """
+    # Get the manifest per the following order:
+    # 1. "client_config.manifest"
+    # 2. "manifest" passed to the `insights.collect()`
+    # 3. "default_manifest" defined in `insights.specs.manifests`
+    manifest = manifests['default'] if manifest is None else manifest
+    if client_config and hasattr(client_config, 'manifest') and client_config.manifest:
+        manifest = client_config.manifest
+    manifest = load_manifest(manifest)
+
+    client = manifest.get("client", {})
+    plugins = manifest.get("plugins", {})
+
+    load_packages(plugins.get("packages", []))
+    apply_default_enabled(plugins)
+    apply_configs(plugins)
+    # process blacklist
+    black_list = client.get("blacklist", {})
+    black_list.update(client_config['redact_conf'] or {})
+    apply_blacklist(black_list)
+
+    # insights-client
+    if client_config and client_config.cmd_timeout:
         try:
-            if not os.path.isdir(constants.insights_core_lib_dir):
-                logger.debug(
-                    "Creating directory %s for the Core." % (constants.insights_core_lib_dir)
-                )
-                os.mkdir(constants.insights_core_lib_dir)
-        except OSError:
-            logger.info(
-                "There was an error creating %s for core installation."
-                % (constants.insights_core_lib_dir)
-            )
-            raise
+            client['context']['args']['timeout'] = client_config.cmd_timeout
+        except LookupError:
+            log.warning('Could not set timeout option.')
 
-        # Copy the NEW (/tmp/insights-core.egg) egg to /var/lib/insights/newest.egg
-        # Additionally, copy NEW (/tmp/insights-core.egg.asc) to /var/lib/insights/newest.egg.asc
-        try:
-            logger.debug("Copying %s to %s." % (new_egg, constants.insights_core_newest))
-            shutil.copyfile(new_egg, constants.insights_core_newest)
-            shutil.copyfile(new_egg_gpg_sig, constants.insights_core_gpg_sig_newest)
-        except IOError:
-            logger.info(
-                "There was an error copying the new core from %s to %s."
-                % (new_egg, constants.insights_core_newest)
-            )
-            raise
-
-        logger.debug("The new Insights Core was installed successfully.")
-        return {'success': True}
-
-    def delete_tmpdir(self):
-        if self.tmpdir:
-            logger.debug("Deleting temp directory %s." % (self.tmpdir))
-            shutil.rmtree(self.tmpdir, True)
-
-    @_net
-    def collect(self):
-        # return collection results
-        tar_file = client.collect(self.config)
-
-        # it is important to note that --to-stdout is utilized via the wrapper RPM
-        # this file is received and then we invoke shutil.copyfileobj
-        return tar_file
-
-    @_net
-    def register(self):
-        """
-        returns (bool | None):
-            True - machine is registered
-            False - machine is unregistered
-            None - could not reach the API
-        """
-        return client.handle_registration(self.config, self.connection)
-
-    @_net
-    def unregister(self):
-        """
-        returns (bool): True success, False failure
-        """
-        return client.handle_unregistration(self.config, self.connection)
-
-    @_net
-    def upload(self, payload=None, content_type=None):
-        """
-        Upload the archive at `path` with content type `content_type`
-        returns (int): upload status code
-        """
-        # platform - prefer the value passed in to func over config
-        payload = payload or self.config.payload
-        content_type = content_type or self.config.content_type
-
-        if payload is None:
-            raise ValueError('Specify a file to upload.')
-
-        if not os.path.exists(payload):
-            raise IOError('Cannot upload %s: File does not exist.' % payload)
-
-        upload_results = client.upload(self.config, self.connection, payload, content_type)
-
-        # return api response
-        return upload_results
-
-    def rotate_eggs(self):
-        """
-        moves newest.egg to last_stable.egg
-        this is used by the upload() function upon 2XX return
-        returns (bool): if eggs rotated successfully
-        raises (IOError): if it cant copy the egg from newest to last_stable
-        """
-        # make sure the library directory exists
-        if os.path.isdir(constants.insights_core_lib_dir):
-            # make sure the newest.egg exists
-            if os.path.isfile(constants.insights_core_newest):
-                # try copying newest to latest_stable
-                try:
-                    # copy the core
-                    shutil.move(constants.insights_core_newest, constants.insights_core_last_stable)
-                    # copy the core sig
-                    shutil.move(
-                        constants.insights_core_gpg_sig_newest,
-                        constants.insights_core_last_stable_gpg_sig,
-                    )
-                except IOError:
-                    message = "There was a problem copying %s to %s." % (
-                        constants.insights_core_newest,
-                        constants.insights_core_last_stable,
-                    )
-                    logger.debug(message)
-                    raise IOError(message)
-                return True
-            else:
-                message = "Cannot copy %s to %s because %s does not exist." % (
-                    constants.insights_core_newest,
-                    constants.insights_core_last_stable,
-                    constants.insights_core_newest,
-                )
-                logger.debug(message)
-                return False
-        else:
-            logger.debug(
-                "Cannot copy %s to %s because the %s directory does not exist."
-                % (
-                    constants.insights_core_newest,
-                    constants.insights_core_last_stable,
-                    constants.insights_core_lib_dir,
-                )
-            )
-            logger.debug("Try installing the Core first.")
-            return False
-
-    def get_last_upload_results(self):
-        """
-        returns (json): returns last upload json results or False
-        """
-        if os.path.isfile(constants.last_upload_results_file):
-            logger.debug(
-                'Last upload file %s found, reading results.', constants.last_upload_results_file
-            )
-            with open(constants.last_upload_results_file, 'r') as handler:
-                return handler.read()
-        else:
-            logger.debug(
-                'Last upload file %s not found, cannot read results',
-                constants.last_upload_results_file,
-            )
-            return False
-
-    @_net
-    def get_registration_status(self):
-        """
-        returns (json):
-            {'messages': [dotfile message, api message],
-             'status': (bool) registered = true; unregistered = false
-             'unreg_date': Date the machine was unregistered | None,
-             'unreachable': API could not be reached}
-        """
-        return client.get_registration_status(self.config, self.connection)
-
-    @_net
-    def set_display_name(self, display_name):
-        '''
-        returns True on success, False on failure
-        '''
-        return self.connection.set_display_name(display_name)
-
-    @_net
-    def set_ansible_host(self, ansible_host):
-        '''
-        returns True on success, False on failure
-        '''
-        return self.connection.set_ansible_host(ansible_host)
-
-    @_net
-    def get_diagnosis(self):
-        '''
-        returns JSON of diagnosis data on success, None on failure
-        Optional arg remediation_id to get a particular remediation set.
-        '''
-        if self.config.offline:
-            logger.error('Cannot get diagnosis in offline mode.')
-            return None
-        return self.connection.get_diagnosis()
-
-    def delete_cached_branch_info(self):
-        '''
-        Deletes cached branch_info file
-        '''
-        if os.path.isfile(constants.cached_branch_info):
-            logger.debug('Deleting cached branch_info file...')
-            os.remove(constants.cached_branch_info)
-        else:
-            logger.debug('Cached branch_info file does not exist.')
-
-    def get_machine_id(self):
-        return client.get_machine_id()
-
-    @_net
-    def check_results(self):
-        content = self.connection.get_advisor_report()
-        if content is None:
-            raise Exception("Error: failed to download advisor report.")
-
-    def show_results(self):
-        '''
-        Show insights about this machine
-        '''
-        try:
-            with open("/var/lib/insights/insights-details.json", mode="r+b") as f:
-                insights_data = json.load(f)
-            print(json.dumps(insights_data, indent=1))
-        except IOError as e:
-            if e.errno == errno.ENOENT:
-                raise Exception(
-                    "Error: no report found. "
-                    "Check the results to update the report cache: %s"
-                    "\n# insights-client --check-results" % e
-                )
-            else:
-                raise e
-
-    def show_inventory_deep_link(self):
-        """
-        Show a deep link to this host inventory record
-        """
-        system = self.connection._fetch_system_by_machine_id()
-        if system:
-            try:
-                id = system["id"]
-                logger.info("View details about this system on console.redhat.com:")
-                logger.info("https://console.redhat.com/insights/inventory/{0}".format(id))
-            except Exception as e:
-                logger.error("Error: malformed system record: {0}: {1}".format(system, e))
-
-    def copy_to_output_dir(self, insights_archive):
-        '''
-        Copy the collected data from temp to the directory
-        specified by --output-dir
-
-        Parameters:
-            insights_archive - the path to the collected dir
-        '''
-        logger.debug(
-            'Copying collected data from %s to %s', insights_archive, self.config.output_dir
-        )
-        try:
-            shutil.copytree(insights_archive, self.config.output_dir)
-        except OSError as e:
-            if e.errno == 17:
-                # dir exists already, see if it's empty
-                if os.listdir(self.config.output_dir):
-                    # we should never get here because of the check in config.py, but just in case
-                    logger.error('ERROR: Could not write data to %s.', self.config.output_dir)
-                    logger.error(e)
-                    return
-                else:
-                    # if it's empty, copy the contents to it
-                    for fil in os.listdir(insights_archive):
-                        src_path = os.path.join(insights_archive, fil)
-                        dst_path = os.path.join(self.config.output_dir, fil)
-                        try:
-                            if os.path.isfile(src_path):
-                                shutil.copyfile(src_path, dst_path)
-                            elif os.path.isdir(src_path):
-                                shutil.copytree(src_path, dst_path)
-                        except OSError as e:
-                            logger.error(e)
-                            # in case this happens partway through let the user know
-                            logger.warning('WARNING: Directory copy may be incomplete.')
-                            return
-            else:
-                # some other error
-                logger.error(e)
-                return
-        logger.info('Collected data copied to %s', self.config.output_dir)
-
-    def copy_to_output_file(self, insights_archive):
-        '''
-        Copy the collected archive from temp to the file
-        specified by output-file
-
-        insights_archive - the path to the collected archive
-        '''
-        logger.debug('Copying archive from %s to %s', insights_archive, self.config.output_file)
-        try:
-            shutil.copyfile(insights_archive, self.config.output_file)
-        except OSError as e:
-            # file exists already
-            logger.error('ERROR: Could not write data to %s', self.config.output_file)
-            logger.error(e)
-            return
-        logger.info('Collected data copied to %s', self.config.output_file)
-
-    def initialize_tags(self):
-        '''
-        Initialize the tags file if needed
-        '''
-        # migrate the old file if necessary
-        migrate_tags()
-
-        # initialize with group if group was specified
-        if self.config.group:
-            tags = get_tags()
-            if tags is None:
-                tags = {}
-            tags["group"] = self.config.group
-            write_tags(tags)
-
-    def list_specs(self):
-        logger.info(
-            "For a full list of insights-core datasources, please refer to https://insights-core.readthedocs.io/en/latest/specs_catalog.html"
-        )
-        logger.info(
-            "The items in General Datasources can be selected for omission by adding them to the 'components' section of file-redaction.yaml"
-        )
-        logger.info(
-            "When specifying these items in file-redaction.yaml, they must be prefixed with 'insights.specs.default.DefaultSpecs.', i.e. 'insights.specs.default.DefaultSpecs.httpd_V'"
-        )
-
-    @_net
-    def checkin(self):
-        if self.config.offline:
-            logger.error('Cannot check-in in offline mode.')
-            return None
-
-        return self.connection.checkin()
-
-
-def format_config(config):
-    # Log config except the password
-    # and proxy as it might have a pw as well
-    config_copy = config.copy()
     try:
-        del config_copy["password"]
-        del config_copy["proxy"]
-    finally:
-        return json.dumps(config_copy, indent=4)
+        filters.load()
+    except IOError as e:
+        # could not load filters file
+        log.debug("No filters available: %s", str(e))
+    except AttributeError as e:
+        # problem parsing the filters
+        log.debug("Could not parse filters: %s", str(e))
+
+    output_path = os.path.join(output_dir, archive_name)
+    fs.ensure_path(output_path)
+    fs.touch(os.path.join(output_path, "insights_archive.txt"))
+
+    broker = dr.Broker()
+    ctx = create_context(client.get("context", {}))
+    cleaner = Cleaner(client_config, black_list) if client_config else None
+    broker[ctx.__class__] = ctx
+    broker['cleaner'] = cleaner
+    broker['redact_config'] = black_list
+    broker['client_config'] = client_config
+
+    # run in "serial" mode by default
+    run_strategy = client.get("run_strategy", {"name": "serial"})
+    parallel = run_strategy.get("name") == "parallel"
+    to_persist = get_to_persist(client.get("persist", set()))
+
+    if client_config and client_config.obfuscation_list and parallel:
+        log.warning("Parallel collection is not supported when 'obfuscate' is enabled")
+        parallel = False
+
+    pool_args = run_strategy.get("args", {})
+    with get_pool(parallel, "insights-collector-pool", pool_args) as pool:
+        h = Hydration(output_path, ctx, pool=pool)
+        broker.add_observer(h.make_persister(to_persist))
+        dr.run_all(broker=broker, pool=pool)
+
+    collect_errors = _parse_broker_exceptions(broker, EXCEPTIONS_TO_REPORT)
+
+    cleaner.generate_report(archive_name) if cleaner else None
+
+    if compress:
+        return create_archive(output_path), collect_errors
+    return output_path, collect_errors
 
 
-def _init_client_config_dirs():
-    '''
-    Initialize log and lib dirs
-    TODO: init non-root config dirs
-    '''
-    for d in (constants.log_dir, constants.insights_core_lib_dir):
-        try:
-            os.makedirs(d)
-        except OSError as e:
-            if e.errno == errno.EEXIST:
-                # dir exists, this is OK
-                pass
-            else:
-                raise e
+def _parse_broker_exceptions(broker, exceptions_to_report):
+    """
+    Parse the exceptions captured in the broker during core collection
+    and keep only exception types configured in the ``exceptions_to_report``.
+
+    Args:
+        broker (Broker): Broker object used for core collection.
+        exceptions_to_report (set): Exception types to retrieve from the broker.
+
+    Returns:
+        (dict): A dictionary with relevant exceptions captured by the broker.
+    """
+    errors = {}
+    try:
+        if broker.exceptions:
+            for component, exceptions in broker.exceptions.items():
+                for ex in exceptions:
+                    ex_type = type(ex)
+                    if ex_type in exceptions_to_report:
+                        if ex_type in errors.keys():
+                            errors[ex_type].append((ex, component))
+                        else:
+                            errors[ex_type] = [(ex, component)]
+    except Exception as e:
+        log.warning("Could not parse exceptions from the broker.: %s", str(e))
+    return errors
 
 
-def _write_pid_files():
-    for file, content in (
-        (constants.pidfile, str(os.getpid())),  # PID in case we need to ping systemd
-        (
-            constants.ppidfile,
-            get_parent_process(),
-        ),  # PPID so that we can grab the client execution method
-    ):
-        write_to_disk(file, content=content)
-        atexit.register(write_to_disk, file, delete=True)
+def main():
+    # Remove command line args so that they are not parsed by any called modules
+    # The main fxn is only invoked as a cli, if calling from another cli then
+    # use the collect function instead
+    config = InsightsConfig()
+
+    # return dc.done()
+    #########################
+
+    collect_args = [arg for arg in sys.argv[1:]] if len(sys.argv) > 1 else []
+    sys.argv = (
+        [
+            sys.argv[0],
+        ]
+        if sys.argv
+        else sys.argv
+    )
+
+    p = argparse.ArgumentParser()
+    p.add_argument("-m", "--manifest", help="Manifest yaml.")
+    p.add_argument("-o", "--out_path", help="Path to write output data.")
+    p.add_argument("-q", "--quiet", help="Error output only.", action="store_true")
+    p.add_argument("-v", "--verbose", help="Verbose output.", action="store_true")
+    p.add_argument("-d", "--debug", help="Debug output.", action="store_true")
+    p.add_argument("-c", "--compress", help="Compress", action="store_true", default=True)
+    args = p.parse_args(args=collect_args)
+
+    level = logging.WARNING
+    if args.verbose:
+        level = logging.INFO
+    if args.debug:
+        level = logging.DEBUG
+    if args.quiet:
+        level = logging.ERROR
+
+    logging.basicConfig(level=level)
+
+    out_path = args.out_path or tempfile.gettempdir()
+    archive, errors = collect(
+        output_dir=out_path,
+        archive_name=generate_archive_name(config),
+        client_config=config,
+        compress=args.compress,
+        manifest=args.manifest,
+    )
+    print(archive)
+
+
+if __name__ == "__main__":
+    main()

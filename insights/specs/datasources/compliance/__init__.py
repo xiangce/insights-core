@@ -7,8 +7,8 @@ from logging import getLogger
 from re import findall
 from sys import exit
 
-from insights.client.connection import InsightsConnection
-from insights.client.constants import InsightsConstants as constants
+from insights.collector.connection import InsightsConnection
+from insights.collector.constants import InsightsConstants as constants
 from insights.util.subproc import call
 
 

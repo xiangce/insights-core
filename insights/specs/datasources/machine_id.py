@@ -4,12 +4,12 @@ Custom datasource to get the duplicate machine info.
 
 import json
 
+from insights.collector.connection import InsightsConnection
 from insights.core.plugins import datasource
 from insights.core.spec_factory import DatasourceProvider
 from insights.core.filters import get_filters
 from insights.core.context import HostContext
 from insights.core.exceptions import SkipComponent
-from insights.client.client import get_connection
 from insights.specs import Specs
 
 
@@ -39,7 +39,7 @@ def dup_machine_id_info(broker):
         if machine_id in filters:
             config = broker.get('client_config')
             try:
-                conn = get_connection(config)
+                conn = InsightsConnection(config)
                 if config.legacy_upload:
                     url = conn.base_url + '/platform/inventory/v1/hosts?insights_id=' + machine_id
                 else:
