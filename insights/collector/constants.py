@@ -37,15 +37,13 @@ def _lib_dir():
 class InsightsConstants(object):
     app_name = _app_name
     auth_method = 'BASIC'
-    package_path = os.path.dirname(
-        os.path.dirname(os.path.abspath(__file__)))
+    package_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sleep_time = 180
     command_blacklist = ('rm', 'kill', 'reboot', 'shutdown')
     default_conf_dir = os.getenv('INSIGHTS_CONF_DIR', default='/etc/insights-client')
     default_conf_file = os.path.join(default_conf_dir, 'insights-client.conf')
     default_tags_file = os.path.join(default_conf_dir, 'tags.yaml')
     log_dir = _log_dir()
-    simple_find_replace_dir = '/etc/redhat-access-insights'
     default_log_file = os.path.join(log_dir, app_name + '.log')
     default_payload_log = os.path.join(log_dir, app_name + '-payload.log')
     custom_network_log_level = 11
@@ -55,10 +53,12 @@ class InsightsConstants(object):
     clouddot_fqdn = "cert.cloud.redhat.com"
     consoledot_fqdn = "cert.console.redhat.com"
     consoledot_fqdn_stage = "cert.console.stage.redhat.com"
-    unregistered_files = [os.path.join(default_conf_dir, '.unregistered'),
-                          os.path.join(simple_find_replace_dir, '.unregistered')]
-    registered_files = [os.path.join(default_conf_dir, '.registered'),
-                        os.path.join(simple_find_replace_dir, '.registered')]
+    unregistered_files = [
+        os.path.join(default_conf_dir, '.unregistered'),
+    ]
+    registered_files = [
+        os.path.join(default_conf_dir, '.registered'),
+    ]
     lastupload_file = os.path.join(default_conf_dir, '.lastupload')
     pub_gpg_path = os.path.join(default_conf_dir, 'redhattools.pub.gpg')
     machine_id_file = os.path.join(default_conf_dir, 'machine-id')

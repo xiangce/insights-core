@@ -1,6 +1,7 @@
 """
 Auto Configuration Helper
 """
+
 from __future__ import absolute_import
 
 import collections
@@ -19,12 +20,14 @@ APP_NAME = constants.app_name
 
 try:
     import rhsm.config
+
     # subscription-manager recommends to use 'get_config_parser()' instead,
     # but RHEL <= 7 doesn't have the method renamed/aliased yet.
     get_rhsm_config = rhsm.config.initConfig
     _rhsm_config_exception = None  # type: Exception | None
 except Exception as exc:
     import configparser
+
     _rhsm_config_exception = exc
 
     def get_rhsm_config():
@@ -90,12 +93,14 @@ def _read_rhsm_proxy_settings(rhsm_config):
             hostname=rhsm_proxy_hostname,
             port=rhsm_proxy_port,
         )
-        logger.debug("Using RHSM proxy '{scheme}://{credentials}{hostname}:{port}'.".format(
-            scheme=rhsm_proxy_scheme,
-            credentials=obfuscated_proxy_credentials,
-            hostname=rhsm_proxy_hostname,
-            port=rhsm_proxy_port,
-        ))
+        logger.debug(
+            "Using RHSM proxy '{scheme}://{credentials}{hostname}:{port}'.".format(
+                scheme=rhsm_proxy_scheme,
+                credentials=obfuscated_proxy_credentials,
+                hostname=rhsm_proxy_hostname,
+                port=rhsm_proxy_port,
+            )
+        )
 
     rhsm_no_proxy = rhsm_config.get('server', 'no_proxy').strip()  # type: str | None
     if rhsm_no_proxy.lower() == 'none' or rhsm_no_proxy == '':
@@ -160,7 +165,11 @@ def _should_use_legacy_api(client_config, rhel_version):
         return True
 
     if client_config.legacy_upload is False:
-        logger.debug("Legacy API is explicitly disabled (reason: {}).".format(client_config._legacy_upload_reason))
+        logger.debug(
+            "Legacy API is explicitly disabled (reason: {}).".format(
+                client_config._legacy_upload_reason
+            )
+        )
         return False
 
     if rhel_version >= 10:
@@ -184,7 +193,9 @@ def autoconfigure_network(client_config):
         logger.debug("No reason to autoconfigure, host isn't registered with subscription-manager.")
         return
     if not client_config.auto_config:
-        logger.debug("Autoconfiguration is disabled, API URL is '{}'.".format(client_config.base_url))
+        logger.debug(
+            "Autoconfiguration is disabled, API URL is '{}'.".format(client_config.base_url)
+        )
         return
 
     try:
@@ -205,17 +216,25 @@ def autoconfigure_network(client_config):
     api_config = _read_rhsm_settings(rhsm_config, rhel_version)  # type: APIConfig
     proxy_config = _read_rhsm_proxy_settings(rhsm_config)  # type: ProxyConfig
 
-    if api_config.deployment_type == DeploymentType.PRODUCTION and _should_use_legacy_api(client_config, rhel_version):
+    if api_config.deployment_type == DeploymentType.PRODUCTION and _should_use_legacy_api(
+        client_config, rhel_version
+    ):
         api_config = APIConfig(
             url="cert-api.access.redhat.com/r/insights",
             cert_verify=None,  # the connection.py treats None as 'use dedicated certificate'
             deployment_type=DeploymentType.PRODUCTION_LEGACY,
         )
 
-    logger.debug("Parsed RHSM configuration: deployment={deployment}, authorization={authn}.".format(
-        deployment=api_config.deployment_type,
-        authn="legacy certificate" if api_config.cert_verify is None else str(api_config.cert_verify),
-    ))
+    logger.debug(
+        "Parsed RHSM configuration: deployment={deployment}, authorization={authn}.".format(
+            deployment=api_config.deployment_type,
+            authn=(
+                "legacy certificate"
+                if api_config.cert_verify is None
+                else str(api_config.cert_verify)
+            ),
+        )
+    )
 
     apply_network_configuration(
         client_config,

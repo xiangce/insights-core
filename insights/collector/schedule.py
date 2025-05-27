@@ -1,6 +1,7 @@
 """
 Module responsible for scheduling Insights data collection in cron
 """
+
 from __future__ import absolute_import
 import os
 import logging

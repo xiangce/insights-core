@@ -22,6 +22,7 @@ class GPGCommandResult(object):
     :param _command: An optional reference to the GPGCommand object that created the result.
     :type _command: GPGCommand | None
     """
+
     def __init__(self, ok, return_code, stdout, stderr, command):
         self.ok = ok
         self.return_code = return_code
@@ -30,12 +31,12 @@ class GPGCommandResult(object):
         self._command = command
 
     def __str__(self):
-        return (
-            "<{cls} ok={ok} return_code={code} stdout={out} stderr={err}>"
-        ).format(
+        return ("<{cls} ok={ok} return_code={code} stdout={out} stderr={err}>").format(
             cls=self.__class__.__name__,
-            ok=self.ok, code=self.return_code,
-            out=self.stdout, err=self.stderr,
+            ok=self.ok,
+            code=self.return_code,
+            out=self.stdout,
+            err=self.stderr,
         )
 
 
@@ -51,6 +52,7 @@ class GPGCommand(object):
     :param _raw_command: The last invoked command.
     :type _raw_command: list[str] | None
     """
+
     TEMPORARY_GPG_HOME_PARENT_DIRECTORY = "/var/lib/insights/"
 
     def __init__(self, command, key):
@@ -61,9 +63,7 @@ class GPGCommand(object):
 
     def __str__(self):
         return "<{cls} _home={home} _raw_command={raw}>".format(
-            cls=self.__class__.__name__,
-            home=self._home,
-            raw=self._raw_command
+            cls=self.__class__.__name__, home=self._home, raw=self._raw_command
         )
 
     def _setup(self):
@@ -80,9 +80,9 @@ class GPGCommand(object):
         logger.debug("setting up gpg temporary environment in '{home}'".format(home=self._home))
         result = self._run(["--import", self.key])  # type: GPGCommandResult
         if not result.ok:
-            logger.warning("failed to import key '{key}': {result}".format(
-                key=self.key, result=result
-            ))
+            logger.warning(
+                "failed to import key '{key}': {result}".format(key=self.key, result=result)
+            )
         return result
 
     def _supports_cleanup_socket(self):
@@ -93,14 +93,17 @@ class GPGCommand(object):
         """
         version_process = subprocess.Popen(
             ["/usr/bin/gpg", "--version"],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             universal_newlines=True,
             env={"GNUPGHOME": self._home, "LC_ALL": "C.UTF-8"},
         )
         stdout, stderr = version_process.communicate()
         if version_process.returncode != 0:
             stderr = stderr.decode("utf-8") if isinstance(stderr, bytes) else stderr
-            stderr = "\n".join("stderr: {line}".format(line=line) for line in stderr.split("\n") if len(line))
+            stderr = "\n".join(
+                "stderr: {line}".format(line=line) for line in stderr.split("\n") if len(line)
+            )
             logger.debug("could not query for gpg version:\n{err}".format(err=stderr))
             return False
 
@@ -109,14 +112,22 @@ class GPGCommand(object):
                 version = line.split(" ")[-1]  # type: str
                 break
         else:
-            stdout = "\n".join("stdout: {line}".format(line=line) for line in stdout.split("\n") if len(line))
-            logger.debug("could not query for gpg version: output not recognized:\n{out}".format(out=stdout))
+            stdout = "\n".join(
+                "stdout: {line}".format(line=line) for line in stdout.split("\n") if len(line)
+            )
+            logger.debug(
+                "could not query for gpg version: output not recognized:\n{out}".format(out=stdout)
+            )
             return False
 
         try:
             version_info = tuple(int(v) for v in version.split("."))
         except Exception as exc:
-            logger.debug("gpg version could not be parsed: '{version}: {exc}".format(version=version, exc=str(exc)))
+            logger.debug(
+                "gpg version could not be parsed: '{version}: {exc}".format(
+                    version=version, exc=str(exc)
+                )
+            )
             return False
         if len(version_info) < 3:
             logger.debug("gpg version is not recognized: '{version}'".format(version=version))
@@ -140,13 +151,16 @@ class GPGCommand(object):
         # directory. This is only supported since gnupg 2.1.18 (RHEL 8).
         shutdown_process = subprocess.Popen(
             ["/usr/bin/gpgconf", "--kill", "all"],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             universal_newlines=True,
             env={"GNUPGHOME": self._home, "LC_ALL": "C.UTF-8"},
         )
         _, stderr = shutdown_process.communicate()
         if shutdown_process.returncode != 0:
-            stderr = "\n".join("stderr: {line}".format(line=line) for line in stderr.split("\n") if len(line))
+            stderr = "\n".join(
+                "stderr: {line}".format(line=line) for line in stderr.split("\n") if len(line)
+            )
             logger.debug(
                 "could not kill the GPG agent, got return code {rc}: \n{err}".format(
                     rc=shutdown_process.returncode, err=stderr
@@ -185,7 +199,8 @@ class GPGCommand(object):
         self._raw_command = ["/usr/bin/gpg", "--homedir", self._home] + command
         process = subprocess.Popen(
             self._raw_command,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             env={"LC_ALL": "C.UTF-8"},
         )
         stdout, stderr = process.communicate()
@@ -203,7 +218,8 @@ class GPGCommand(object):
         else:
             logger.debug(
                 "gpg command {command} returned non-zero code: {result}".format(
-                    command=command, result=result,
+                    command=command,
+                    result=result,
                 )
             )
 
@@ -242,11 +258,7 @@ def verify_gpg_signed_file(file, signature, key):
     :rtype: GPGCommandResult
     """
     if not os.path.isfile(file):
-        logger.debug(
-            "cannot verify signature of '{file}', file does not exist".format(
-                file=file
-            )
-        )
+        logger.debug("cannot verify signature of '{file}', file does not exist".format(file=file))
         return GPGCommandResult(
             ok=False,
             return_code=1,
@@ -256,10 +268,11 @@ def verify_gpg_signed_file(file, signature, key):
         )
 
     if not os.path.isfile(signature):
-        logger.debug((
-            "cannot verify signature of '{file}', "
-            "signature '{signature}' does not exist"
-        ).format(file=file, signature=signature))
+        logger.debug(
+            (
+                "cannot verify signature of '{file}', " "signature '{signature}' does not exist"
+            ).format(file=file, signature=signature)
+        )
         return GPGCommandResult(
             ok=False,
             return_code=1,

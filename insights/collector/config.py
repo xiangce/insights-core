@@ -25,96 +25,12 @@ if six.PY2:
 
 
 DEFAULT_OPTS = {
-    'analyze_container': {
-        'default': False,
-        'opt': ['--analyze-container'],
-        'help': argparse.SUPPRESS,
-        'action': 'store_true',
-    },
-    'analyze_image_id': {
-        'default': False,
-        'opt': ['--analyze-image-id'],
-        'help': argparse.SUPPRESS,
-        'const': True,
-        'nargs': '?',
-    },
-    'analyze_file': {
-        'default': False,
-        'opt': ['--analyze-file'],
-        'help': argparse.SUPPRESS,
-        'const': True,
-        'nargs': '?',
-    },
-    'analyze_mountpoint': {
-        'default': False,
-        'opt': ['--analyze-mountpoint'],
-        'help': argparse.SUPPRESS,
-        'const': True,
-        'nargs': '?',
-    },
-    'ansible_host': {
-        'default': None,
-        'opt': ['--ansible-host'],
-        'help': 'Set an Ansible hostname for this system. ',
-        'action': 'store',
-    },
-    'authmethod': {
-        # non-CLI
-        'default': 'BASIC'
-    },
-    'auto_config': {
-        # non-CLI
-        'default': True
-    },
-    'auto_update': {
-        # non-CLI
-        'default': True
-    },
-    'base_url': {
-        # non-CLI
-        'default': constants.base_url
-    },
-    'branch_info': {
-        # non-CLI
-        'default': constants.default_branch_info
-    },
-    'branch_info_url': {
-        # non-CLI
-        'default': None
-    },
-    'cert_verify': {
-        # non-CLI
-        'default': None,
-    },
     'check_results': {
         'default': False,
         'opt': ['--check-results'],
         'help': argparse.SUPPRESS,
         'action': "store_true",
         'group': 'actions',
-    },
-    'checkin': {
-        'default': False,
-        'opt': ['--checkin'],
-        'help': 'Do a lightweight check-in instead of full upload',
-        'action': "store_true",
-        'group': 'actions',
-    },
-    'cmd_timeout': {
-        # non-CLI
-        'default': constants.default_cmd_timeout
-    },
-    'collection_rules_url': {
-        # non-CLI
-        'default': None
-    },
-    'app': {
-        'default': None,
-        'opt': ['--collector'],
-        'help': 'Run the specified app and upload its results archive',
-        'action': 'store',
-        'group': 'actions',
-        'dest': 'app',
     },
     'manifest': {
         'default': None,
@@ -124,173 +40,34 @@ DEFAULT_OPTS = {
         'group': 'actions',
         'dest': 'manifest',
     },
-    'build_packagecache': {
-        'default': False,
-        'opt': ['--build-packagecache'],
-        'help': 'Refresh the system package manager cache',
-        'action': 'store_true',
-        'group': 'actions',
-    },
-    'compliance': {
-        'default': False,
-        'opt': ['--compliance'],
-        'help': 'Scan the system using openscap and upload the report',
-        'action': 'store_true',
-        'group': 'actions',
-    },
-    'compliance_policies': {
-        'default': False,
-        'opt': ['--compliance-policies'],
-        'help': 'List the compliance policies assignable to the system',
-        'action': 'store_true',
-        'group': 'actions',
-    },
-    'compliance_assign': {
-        'default': None,
-        'opt': ['--compliance-assign'],
-        'help': 'Assign the system to a compliance policy with the specified ID',
-        'action': 'store',
-        'group': 'actions',
-    },
-    'compliance_unassign': {
-        'default': None,
-        'opt': ['--compliance-unassign'],
-        'help': 'Unassign the system from a compliance policy with the specified ID',
-        'action': 'store',
-        'group': 'actions',
-    },
-    'compressor': {
-        'default': 'gz',
-        'opt': ['--compressor'],
-        'help': argparse.SUPPRESS,
-        'action': 'store',
-    },
-    'conf': {
-        'default': constants.default_conf_file,
-        'opt': ['--conf', '-c'],
-        'help': 'Pass a custom config file',
-        'action': 'store',
-    },
-    'core_collect': {'default': True},
-    'egg_path': {
-        # non-CLI
-        'default': None
-    },
-    'debug': {
-        'default': False,  # Used by client wrapper script
-        'opt': ['--debug-phases'],
-        'help': argparse.SUPPRESS,
-        'action': 'store_true',
-        'dest': 'debug',
-    },
-    'disable_schedule': {
-        'default': False,
-        'opt': ['--disable-schedule'],
-        'help': 'Disable automatic scheduling',
-        'action': 'store_true',
-        'group': 'actions',
-    },
-    'display_name': {
-        'default': None,
-        'opt': ['--display-name'],
-        'help': 'Set a display name for this system. ',
-        'action': 'store',
-    },
-    'enable_schedule': {
-        'default': False,
-        'opt': ['--enable-schedule'],
-        'help': 'Enable automatic scheduling for collection to run',
-        'action': 'store_true',
-        'group': 'actions',
-    },
-    'gpg': {
-        'default': True,
-        'opt': ['--no-gpg'],
-        'help': argparse.SUPPRESS,
-        'action': 'store_false',
-        'group': 'debug',
-        'dest': 'gpg',
-    },
-    'egg_gpg_path': {
-        # non-CLI
-        'default': None
-    },
-    'force': {
-        'default': False,
-        'opt': ['--force'],
-        'help': argparse.SUPPRESS,
-        'action': 'store_true',
-    },
-    'group': {
-        'default': None,
-        'opt': ['--group'],
-        'help': 'Group to add to this system',
-        'action': 'store',
-    },
-    'http_timeout': {
-        # non-CLI
-        'default': 120.0
-    },
-    'keep_archive': {
-        'default': False,
-        'opt': ['--keep-archive'],
-        'help': 'Store archive in /var/cache/insights-client/ after upload',
-        'action': 'store_true',
-        'group': 'debug',
-    },
-    'list_specs': {
-        'default': False,
-        'opt': ['--list-specs'],
-        'help': 'Show insights-client collection specs',
-        'action': 'store_true',
-        'group': 'actions',
-    },
-    'logging_file': {
-        'default': constants.default_log_file,
-        'opt': ['--logging-file'],
-        'help': 'Path to log file location',
-        'action': 'store',
-    },
-    'loglevel': {
-        # non-CLI
-        'default': 'DEBUG'
-    },
-    'net_debug': {
-        'default': False,
-        'opt': ['--net-debug'],
-        'help': 'Log the HTTP method and URL every time a network call is made.',
-        'action': 'store_true',
-        'group': 'debug',
-    },
-    'no_gpg': {
-        # non-CLI
-        'default': False,  # legacy
-    },
-    'no_proxy': {
-        # non-CLI
-        'default': None
-    },
-    'no_upload': {
-        'default': False,
-        'opt': ['--no-upload'],
-        'help': 'Do not upload the archive',
-        'action': 'store_true',
-        'group': 'debug',
-    },
-    'module': {
-        'default': None,
-        'opt': ['--module', '-m'],
-        'help': argparse.SUPPRESS,
-        'action': 'store',
-    },
-    'obfuscate': {
-        # non-CLI, deprecated
-        'default': None  # None is good for distinguishing explicit setting
-    },
-    'obfuscate_hostname': {
-        # non-CLI, deprecated
-        'default': None  # None is good for distinguishing explicit setting
-    },
+    # 'compliance': {
+    #     'default': False,
+    #     'opt': ['--compliance'],
+    #     'help': 'Scan the system using openscap and upload the report',
+    #     'action': 'store_true',
+    #     'group': 'actions',
+    # },
+    # 'compliance_policies': {
+    #     'default': False,
+    #     'opt': ['--compliance-policies'],
+    #     'help': 'List the compliance policies assignable to the system',
+    #     'action': 'store_true',
+    #     'group': 'actions',
+    # },
+    # 'compliance_assign': {
+    #     'default': None,
+    #     'opt': ['--compliance-assign'],
+    #     'help': 'Assign the system to a compliance policy with the specified ID',
+    #     'action': 'store',
+    #     'group': 'actions',
+    # },
+    # 'compliance_unassign': {
+    #     'default': None,
+    #     'opt': ['--compliance-unassign'],
+    #     'help': 'Unassign the system from a compliance policy with the specified ID',
+    #     'action': 'store',
+    #     'group': 'actions',
+    # },
     'obfuscation_list': {
         # non-CLI
         'default': None  # None is good for distinguishing explicit setting
@@ -313,30 +90,11 @@ DEFAULT_OPTS = {
         'help': 'Specify a compressed archive file to write collected data to.',
         'action': 'store',
     },
-    'password': {
-        # non-CLI
-        'default': ''
-    },
-    'proxy': {
-        # non-CLI
-        'default': None
-    },
     'quiet': {
         'default': False,
         'opt': ['--quiet'],
         'help': 'Only display error messages to stdout',
         'action': 'store_true',
-    },
-    'register': {
-        'default': False,
-        'opt': ['--register'],
-        'help': 'Register system to the Red Hat Insights Service',
-        'action': 'store_true',
-        'group': 'actions',
-    },
-    'remove_file': {
-        # non-CLI
-        'default': os.path.join(constants.default_conf_dir, 'remove.conf')
     },
     'tags_file': {
         # non-CLI
@@ -350,16 +108,6 @@ DEFAULT_OPTS = {
         # non-CLI
         'default': os.path.join(constants.default_conf_dir, 'file-content-redaction.yaml')
     },
-    'retries': {
-        'default': 1,
-        'opt': ['--retry'],
-        'help': (
-            'Number of times to retry uploading. %s seconds between tries' % constants.sleep_time
-        ),
-        'action': 'store',
-        'type': int,
-        'dest': 'retries',
-    },
     'ros_collect': {
         # non-CLI
         'default': False,
@@ -369,76 +117,6 @@ DEFAULT_OPTS = {
         'opt': ['--show-results'],
         'help': "Show insights about this host",
         'action': "store_true",
-        'group': 'actions',
-    },
-    'silent': {
-        'default': False,
-        'opt': ['--silent'],
-        'help': 'Display no messages to stdout',
-        'action': 'store_true',
-    },
-    'status': {
-        'default': False,
-        'opt': ['--status'],
-        'help': 'Check this machine\'s registration status with Red Hat Insights',
-        'action': 'store_true',
-        'group': 'debug',
-    },
-    'support': {
-        'default': False,
-        'opt': ['--support'],
-        'help': 'Create a support logfile for Red Hat Insights',
-        'action': 'store_true',
-        'group': 'debug',
-    },
-    'systemid': {'default': None},
-    'test_connection': {
-        'default': False,
-        'opt': ['--test-connection'],
-        'help': 'Test connectivity to Red Hat',
-        'action': 'store_true',
-        'group': 'debug',
-    },
-    'to_json': {
-        'default': False,
-        'opt': ['--to-json'],
-        'help': argparse.SUPPRESS,
-        'action': 'store_true',
-    },
-    'unregister': {
-        'default': False,
-        'opt': ['--unregister'],
-        'help': 'Unregister system from the Red Hat Insights Service',
-        'action': 'store_true',
-        'group': 'actions',
-    },
-    'upload_url': {
-        # non-CLI
-        'default': None
-    },
-    'use_atomic': {
-        'default': None,
-        'opt': ['--use-atomic'],
-        'help': argparse.SUPPRESS,
-        'action': 'store_true',
-        'group': 'debug',
-    },
-    'use_docker': {
-        'default': None,
-        'opt': ['--use-docker'],
-        'help': argparse.SUPPRESS,
-        'action': 'store_true',
-        'group': 'debug',
-    },
-    'username': {
-        # non-CLI
-        'default': ''
-    },
-    'validate': {
-        'default': False,
-        'opt': ['--validate'],
-        'help': 'Validate remove.conf and tags.yaml',
-        'action': 'store_true',
         'group': 'actions',
     },
     'verbose': {
@@ -452,37 +130,6 @@ DEFAULT_OPTS = {
         'opt': ['--version'],
         'help': "Display version",
         'action': "store_true",
-    },
-    'legacy_upload': {
-        # True: upload to insights classic API
-        # False: upload to insights platform API
-        'default': True
-    },
-    '_legacy_upload_reason': {
-        # Since we don't have access to logging when the configuration is
-        # determined, this is a way to gather information about why the
-        # option isn't on its default value.
-        'default': 'default behavior',
-    },
-    'payload': {
-        'default': None,
-        'opt': ['--payload'],
-        'help': 'Use the Insights Client to upload an archive',
-        'action': 'store',
-        'group': 'actions',
-    },
-    'content_type': {
-        'default': None,
-        'opt': ['--content-type'],
-        'help': 'Content type of the archive specified with --payload',
-        'action': 'store',
-    },
-    'diagnosis': {
-        'default': None,
-        'opt': ['--diagnosis'],
-        'help': 'Retrieve a diagnosis for this system',
-        'action': 'store_true',
-        'group': 'actions',
     },
 }
 
@@ -567,32 +214,13 @@ class InsightsConfig(object):
             else:
                 return v
 
-        # put this warning here so the error msg only prints once
-        if (
-            os.environ.get('HTTP_PROXY')
-            and not os.environ.get('HTTPS_PROXY')
-            and self._print_errors
-        ):
-            logger.warning(
-                'WARNING: HTTP_PROXY is unused by insights-client. Please use HTTPS_PROXY.'
-            )
-
-        # ignore these env as they are not config vars
-        ignore = ['INSIGHTS_PHASE']
-
+        ignore = []
         insights_env_opts = dict(
             (k.lower().split("_", 1)[1], _boolify(v))
             for k, v in os.environ.items()
             if k.upper().startswith("INSIGHTS_") and k.upper() not in ignore
         )
 
-        for k in ['retries', 'cmd_timeout', 'http_timeout']:
-            if k in insights_env_opts:
-                v = insights_env_opts[k]
-                try:
-                    insights_env_opts[k] = float(v) if k == 'http_timeout' else int(v)
-                except ValueError:
-                    raise ValueError('ERROR: Invalid value specified for {0}: {1}.'.format(k, v))
         self._update_dict(insights_env_opts)
 
     def _load_command_line(self, conf_only=False):
@@ -634,7 +262,7 @@ class InsightsConfig(object):
 
         self._update_dict(self._cli_opts)
 
-    def _load_config_file(self, fname=None):
+    def _load_config_file(self, fname=constants.default_conf_file):
         '''
         Load config from config file. If fname is not specified,
         config is loaded from the file named by InsightsConfig.conf
@@ -649,8 +277,6 @@ class InsightsConfig(object):
         try:
             if parsedconfig.has_section(constants.app_name):
                 d = dict(parsedconfig.items(constants.app_name))
-            elif parsedconfig.has_section('redhat-access-insights'):
-                d = dict(parsedconfig.items('redhat-access-insights'))
             else:
                 raise ConfigParser.Error
         except ConfigParser.Error:
@@ -679,10 +305,8 @@ class InsightsConfig(object):
         Helper function for actual Insights client use
         '''
         # check for custom conf file before loading conf
-        self._load_command_line(conf_only=True)
         self._load_config_file()
         self._load_env()
-        self._load_command_line()
         self._imply_options()
         self._validate_options()
         return self
@@ -851,7 +475,9 @@ class InsightsConfig(object):
             self.net_debug = True
         if self.payload or self.diagnosis or self.check_results or self.checkin:
             self.legacy_upload = False
-            self._legacy_upload_reason = "--payload, --diagnosis, --check-results and --checkin require non-legacy"
+            self._legacy_upload_reason = (
+                "--payload, --diagnosis, --check-results and --checkin require non-legacy"
+            )
         if self.payload and (self.logging_file == constants.default_log_file):
             self.logging_file = constants.default_payload_log
         if self.output_dir or self.output_file:

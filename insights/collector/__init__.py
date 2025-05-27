@@ -14,13 +14,15 @@ from . import crypto
 from .constants import InsightsConstants as constants
 from .config import InsightsConfig
 from .auto_config import autoconfigure_network
-from .utilities import (write_data_to_file,
-                        write_to_disk,
-                        get_tags,
-                        write_tags,
-                        migrate_tags,
-                        get_rhel_version,
-                        get_parent_process)
+from .utilities import (
+    write_data_to_file,
+    write_to_disk,
+    get_tags,
+    write_tags,
+    migrate_tags,
+    get_rhel_version,
+    get_parent_process,
+)
 
 NETWORK = constants.custom_network_log_level
 logger = logging.getLogger(__name__)
@@ -75,6 +77,7 @@ class InsightsClient(object):
             if not self.config.offline and not self.connection:
                 self.connection = client.get_connection(self.config)
             return func(self, *args, **kwargs)
+
         return _init_connection
 
     def get_conf(self):
@@ -90,14 +93,14 @@ class InsightsClient(object):
     @_net
     def test_connection(self):
         """
-            returns (int): 0 if success 1 if failure
+        returns (int): 0 if success 1 if failure
         """
         return self.connection.test_connection()
 
     @_net
     def branch_info(self):
         """
-            returns (dict): {'remote_leaf': -1, 'remote_branch': -1}
+        returns (dict): {'remote_leaf': -1, 'remote_branch': -1}
         """
         return client.get_branch_info(self.config, self.connection)
 
@@ -114,7 +117,11 @@ class InsightsClient(object):
             response = self.connection.get(url)
             if response.status_code == 200:
                 if 'application/json' not in response.headers.get('Content-Type', ''):
-                    logger.warning("Module update router response is not valid for %s. Expected json format but got %s. Defaulting to /release", url, response.headers.get('Content-Type', ''))
+                    logger.warning(
+                        "Module update router response is not valid for %s. Expected json format but got %s. Defaulting to /release",
+                        url,
+                        response.headers.get('Content-Type', ''),
+                    )
                     return '/release'
                 return response.json()["url"]
             else:
@@ -125,8 +132,8 @@ class InsightsClient(object):
 
     def fetch(self, force=False):
         """
-            returns (dict): {'core': path to new egg, None if no update,
-                             'gpg_sig': path to new sig, None if no update}
+        returns (dict): {'core': path to new egg, None if no update,
+                         'gpg_sig': path to new sig, None if no update}
         """
         self.tmpdir = tempfile.mkdtemp()
         atexit.register(self.delete_tmpdir)
@@ -140,7 +147,7 @@ class InsightsClient(object):
 
         fetch_results = {
             'core': os.path.join(self.tmpdir, egg_name),
-            'gpg_sig': os.path.join(self.tmpdir, '{0}.asc'.format(egg_name))
+            'gpg_sig': os.path.join(self.tmpdir, '{0}.asc'.format(egg_name)),
         }
 
         logger.debug("Beginning core fetch.")
@@ -170,26 +177,22 @@ class InsightsClient(object):
             # else:
             #     egg_gpg_url = '/static/insights-core.egg.asc'
         # run fetch for egg
-        updated = self._fetch(egg_url,
-                              constants.core_etag_file,
-                              fetch_results['core'],
-                              force)
+        updated = self._fetch(egg_url, constants.core_etag_file, fetch_results['core'], force)
 
         # if new core was fetched, get new core sig
         if updated:
             logger.debug("New core was fetched.")
             logger.debug("Beginning fetch for core gpg signature.")
-            self._fetch(egg_gpg_url,
-                        constants.core_gpg_sig_etag_file,
-                        fetch_results['gpg_sig'],
-                        force)
+            self._fetch(
+                egg_gpg_url, constants.core_gpg_sig_etag_file, fetch_results['gpg_sig'], force
+            )
 
             return fetch_results
 
     @_net
     def _fetch(self, path, etag_file, target_path, force):
         """
-            returns (str): path to new egg. None if no update.
+        returns (str): path to new egg. None if no update.
         """
         # Searched for cached etag information
         current_etag = None
@@ -277,7 +280,7 @@ class InsightsClient(object):
             egg_paths = self.fetch()
 
             # if the gpg checks out install it
-            if (egg_paths and self.verify(egg_paths['core'])['gpg']):
+            if egg_paths and self.verify(egg_paths['core'])['gpg']:
                 return self.install(egg_paths['core'], egg_paths['gpg_sig'])
             else:
                 return False
@@ -286,14 +289,14 @@ class InsightsClient(object):
 
     def verify(self, egg_path):
         """
-            Verifies the GPG signature of the egg.  The signature is assumed to
-            be in the same directory as the egg and named the same as the egg
-            except with an additional ".asc" extension.
+        Verifies the GPG signature of the egg.  The signature is assumed to
+        be in the same directory as the egg and named the same as the egg
+        except with an additional ".asc" extension.
 
-            returns (dict): {'gpg': if the egg checks out,
-                             'stderr': error message if present,
-                             'stdout': stdout,
-                             'rc': return code}
+        returns (dict): {'gpg': if the egg checks out,
+                         'stderr': error message if present,
+                         'stdout': stdout,
+                         'rc': return code}
         """
         # check if the provided files (egg and gpg) actually exist
         if egg_path and not os.path.isfile(egg_path):
@@ -319,7 +322,8 @@ class InsightsClient(object):
         # if a valid egg path and gpg were received do the verification
         if egg_path:
             result = crypto.verify_gpg_signed_file(
-                file=egg_path, signature=egg_path + ".asc",
+                file=egg_path,
+                signature=egg_path + ".asc",
                 key=constants.pub_gpg_path,
             )
             return {
@@ -363,12 +367,15 @@ class InsightsClient(object):
         # Make sure /var/lib/insights exists
         try:
             if not os.path.isdir(constants.insights_core_lib_dir):
-                logger.debug("Creating directory %s for the Core." %
-                             (constants.insights_core_lib_dir))
+                logger.debug(
+                    "Creating directory %s for the Core." % (constants.insights_core_lib_dir)
+                )
                 os.mkdir(constants.insights_core_lib_dir)
         except OSError:
-            logger.info("There was an error creating %s for core installation." % (
-                constants.insights_core_lib_dir))
+            logger.info(
+                "There was an error creating %s for core installation."
+                % (constants.insights_core_lib_dir)
+            )
             raise
 
         # Copy the NEW (/tmp/insights-core.egg) egg to /var/lib/insights/newest.egg
@@ -378,8 +385,10 @@ class InsightsClient(object):
             shutil.copyfile(new_egg, constants.insights_core_newest)
             shutil.copyfile(new_egg_gpg_sig, constants.insights_core_gpg_sig_newest)
         except IOError:
-            logger.info("There was an error copying the new core from %s to %s." % (
-                new_egg, constants.insights_core_newest))
+            logger.info(
+                "There was an error copying the new core from %s to %s."
+                % (new_egg, constants.insights_core_newest)
+            )
             raise
 
         logger.debug("The new Insights Core was installed successfully.")
@@ -402,25 +411,25 @@ class InsightsClient(object):
     @_net
     def register(self):
         """
-            returns (bool | None):
-                True - machine is registered
-                False - machine is unregistered
-                None - could not reach the API
+        returns (bool | None):
+            True - machine is registered
+            False - machine is unregistered
+            None - could not reach the API
         """
         return client.handle_registration(self.config, self.connection)
 
     @_net
     def unregister(self):
         """
-            returns (bool): True success, False failure
+        returns (bool): True success, False failure
         """
         return client.handle_unregistration(self.config, self.connection)
 
     @_net
     def upload(self, payload=None, content_type=None):
         """
-            Upload the archive at `path` with content type `content_type`
-            returns (int): upload status code
+        Upload the archive at `path` with content type `content_type`
+        returns (int): upload status code
         """
         # platform - prefer the value passed in to func over config
         payload = payload or self.config.payload
@@ -432,18 +441,17 @@ class InsightsClient(object):
         if not os.path.exists(payload):
             raise IOError('Cannot upload %s: File does not exist.' % payload)
 
-        upload_results = client.upload(
-            self.config, self.connection, payload, content_type)
+        upload_results = client.upload(self.config, self.connection, payload, content_type)
 
         # return api response
         return upload_results
 
     def rotate_eggs(self):
         """
-            moves newest.egg to last_stable.egg
-            this is used by the upload() function upon 2XX return
-            returns (bool): if eggs rotated successfully
-            raises (IOError): if it cant copy the egg from newest to last_stable
+        moves newest.egg to last_stable.egg
+        this is used by the upload() function upon 2XX return
+        returns (bool): if eggs rotated successfully
+        raises (IOError): if it cant copy the egg from newest to last_stable
         """
         # make sure the library directory exists
         if os.path.isdir(constants.insights_core_lib_dir):
@@ -452,75 +460,87 @@ class InsightsClient(object):
                 # try copying newest to latest_stable
                 try:
                     # copy the core
-                    shutil.move(constants.insights_core_newest,
-                             constants.insights_core_last_stable)
+                    shutil.move(constants.insights_core_newest, constants.insights_core_last_stable)
                     # copy the core sig
-                    shutil.move(constants.insights_core_gpg_sig_newest,
-                             constants.insights_core_last_stable_gpg_sig)
+                    shutil.move(
+                        constants.insights_core_gpg_sig_newest,
+                        constants.insights_core_last_stable_gpg_sig,
+                    )
                 except IOError:
-                    message = ("There was a problem copying %s to %s." %
-                                (constants.insights_core_newest,
-                                constants.insights_core_last_stable))
+                    message = "There was a problem copying %s to %s." % (
+                        constants.insights_core_newest,
+                        constants.insights_core_last_stable,
+                    )
                     logger.debug(message)
                     raise IOError(message)
                 return True
             else:
-                message = ("Cannot copy %s to %s because %s does not exist." %
-                            (constants.insights_core_newest,
-                            constants.insights_core_last_stable,
-                            constants.insights_core_newest))
+                message = "Cannot copy %s to %s because %s does not exist." % (
+                    constants.insights_core_newest,
+                    constants.insights_core_last_stable,
+                    constants.insights_core_newest,
+                )
                 logger.debug(message)
                 return False
         else:
-            logger.debug("Cannot copy %s to %s because the %s directory does not exist." %
-                (constants.insights_core_newest,
+            logger.debug(
+                "Cannot copy %s to %s because the %s directory does not exist."
+                % (
+                    constants.insights_core_newest,
                     constants.insights_core_last_stable,
-                    constants.insights_core_lib_dir))
+                    constants.insights_core_lib_dir,
+                )
+            )
             logger.debug("Try installing the Core first.")
             return False
 
     def get_last_upload_results(self):
         """
-            returns (json): returns last upload json results or False
+        returns (json): returns last upload json results or False
         """
         if os.path.isfile(constants.last_upload_results_file):
-            logger.debug('Last upload file %s found, reading results.', constants.last_upload_results_file)
+            logger.debug(
+                'Last upload file %s found, reading results.', constants.last_upload_results_file
+            )
             with open(constants.last_upload_results_file, 'r') as handler:
                 return handler.read()
         else:
-            logger.debug('Last upload file %s not found, cannot read results', constants.last_upload_results_file)
+            logger.debug(
+                'Last upload file %s not found, cannot read results',
+                constants.last_upload_results_file,
+            )
             return False
 
     @_net
     def get_registration_status(self):
         """
-            returns (json):
-                {'messages': [dotfile message, api message],
-                 'status': (bool) registered = true; unregistered = false
-                 'unreg_date': Date the machine was unregistered | None,
-                 'unreachable': API could not be reached}
+        returns (json):
+            {'messages': [dotfile message, api message],
+             'status': (bool) registered = true; unregistered = false
+             'unreg_date': Date the machine was unregistered | None,
+             'unreachable': API could not be reached}
         """
         return client.get_registration_status(self.config, self.connection)
 
     @_net
     def set_display_name(self, display_name):
         '''
-            returns True on success, False on failure
+        returns True on success, False on failure
         '''
         return self.connection.set_display_name(display_name)
 
     @_net
     def set_ansible_host(self, ansible_host):
         '''
-            returns True on success, False on failure
+        returns True on success, False on failure
         '''
         return self.connection.set_ansible_host(ansible_host)
 
     @_net
     def get_diagnosis(self):
         '''
-            returns JSON of diagnosis data on success, None on failure
-            Optional arg remediation_id to get a particular remediation set.
+        returns JSON of diagnosis data on success, None on failure
+        Optional arg remediation_id to get a particular remediation set.
         '''
         if self.config.offline:
             logger.error('Cannot get diagnosis in offline mode.')
@@ -529,7 +549,7 @@ class InsightsClient(object):
 
     def delete_cached_branch_info(self):
         '''
-            Deletes cached branch_info file
+        Deletes cached branch_info file
         '''
         if os.path.isfile(constants.cached_branch_info):
             logger.debug('Deleting cached branch_info file...')
@@ -556,9 +576,11 @@ class InsightsClient(object):
             print(json.dumps(insights_data, indent=1))
         except IOError as e:
             if e.errno == errno.ENOENT:
-                raise Exception("Error: no report found. "
-                                "Check the results to update the report cache: %s"
-                                "\n# insights-client --check-results" % e)
+                raise Exception(
+                    "Error: no report found. "
+                    "Check the results to update the report cache: %s"
+                    "\n# insights-client --check-results" % e
+                )
             else:
                 raise e
 
@@ -571,13 +593,9 @@ class InsightsClient(object):
             try:
                 id = system["id"]
                 logger.info("View details about this system on console.redhat.com:")
-                logger.info(
-                    "https://console.redhat.com/insights/inventory/{0}".format(id)
-                )
+                logger.info("https://console.redhat.com/insights/inventory/{0}".format(id))
             except Exception as e:
-                logger.error(
-                    "Error: malformed system record: {0}: {1}".format(system, e)
-                )
+                logger.error("Error: malformed system record: {0}: {1}".format(system, e))
 
     def copy_to_output_dir(self, insights_archive):
         '''
@@ -587,8 +605,9 @@ class InsightsClient(object):
         Parameters:
             insights_archive - the path to the collected dir
         '''
-        logger.debug('Copying collected data from %s to %s',
-                     insights_archive, self.config.output_dir)
+        logger.debug(
+            'Copying collected data from %s to %s', insights_archive, self.config.output_dir
+        )
         try:
             shutil.copytree(insights_archive, self.config.output_dir)
         except OSError as e:
@@ -627,8 +646,7 @@ class InsightsClient(object):
 
         insights_archive - the path to the collected archive
         '''
-        logger.debug('Copying archive from %s to %s',
-                     insights_archive, self.config.output_file)
+        logger.debug('Copying archive from %s to %s', insights_archive, self.config.output_file)
         try:
             shutil.copyfile(insights_archive, self.config.output_file)
         except OSError as e:
@@ -654,9 +672,15 @@ class InsightsClient(object):
             write_tags(tags)
 
     def list_specs(self):
-        logger.info("For a full list of insights-core datasources, please refer to https://insights-core.readthedocs.io/en/latest/specs_catalog.html")
-        logger.info("The items in General Datasources can be selected for omission by adding them to the 'components' section of file-redaction.yaml")
-        logger.info("When specifying these items in file-redaction.yaml, they must be prefixed with 'insights.specs.default.DefaultSpecs.', i.e. 'insights.specs.default.DefaultSpecs.httpd_V'")
+        logger.info(
+            "For a full list of insights-core datasources, please refer to https://insights-core.readthedocs.io/en/latest/specs_catalog.html"
+        )
+        logger.info(
+            "The items in General Datasources can be selected for omission by adding them to the 'components' section of file-redaction.yaml"
+        )
+        logger.info(
+            "When specifying these items in file-redaction.yaml, they must be prefixed with 'insights.specs.default.DefaultSpecs.', i.e. 'insights.specs.default.DefaultSpecs.httpd_V'"
+        )
 
     @_net
     def checkin(self):
@@ -697,7 +721,10 @@ def _init_client_config_dirs():
 def _write_pid_files():
     for file, content in (
         (constants.pidfile, str(os.getpid())),  # PID in case we need to ping systemd
-        (constants.ppidfile, get_parent_process())  # PPID so that we can grab the client execution method
+        (
+            constants.ppidfile,
+            get_parent_process(),
+        ),  # PPID so that we can grab the client execution method
     ):
         write_to_disk(file, content=content)
         atexit.register(write_to_disk, file, delete=True)

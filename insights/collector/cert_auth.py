@@ -1,6 +1,7 @@
 """
 Module to interact with Satellite Based Certificates
 """
+
 from __future__ import print_function
 import os
 import logging
@@ -12,6 +13,7 @@ RHSM_CONFIG = None
 try:
     from rhsm.config import initConfig
     from rhsm.certificate import create_from_pem
+
     RHSM_CONFIG = initConfig()
 except ImportError:
     logger.debug("Could not load RHSM modules")
@@ -48,8 +50,7 @@ class rhsmCertificate:
 
     @classmethod
     def exists(cls):
-        return (os.path.exists(cls.keypath()) and
-                os.path.exists(cls.certpath()))
+        return os.path.exists(cls.keypath()) and os.path.exists(cls.certpath())
 
     @classmethod
     def existsAndValid(cls):
@@ -78,6 +79,4 @@ class rhsmCertificate:
         return self.x509.serial
 
     def __str__(self):
-        return 'consumer: name="%s", uuid%s' % \
-               (self.getConsumerName(),
-                self.getConsumerId())
+        return 'consumer: name="%s", uuid%s' % (self.getConsumerName(), self.getConsumerId())

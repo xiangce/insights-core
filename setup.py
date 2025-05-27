@@ -11,7 +11,7 @@ for name in package_info:
 
 entry_points = {
     'console_scripts': [
-        'insights-collect = insights.collect:main',
+        'insights-collect = insights.collector:main',
         'insights-run = insights:main',
         'insights = insights.command_parser:main',
         'insights-cat = insights.tools.cat:main',

@@ -322,7 +322,7 @@ def main():
     p.add_argument("-q", "--quiet", help="Error output only.", action="store_true")
     p.add_argument("-v", "--verbose", help="Verbose output.", action="store_true")
     p.add_argument("-d", "--debug", help="Debug output.", action="store_true")
-    p.add_argument("-c", "--compress", help="Compress", action="store_true")
+    p.add_argument("-c", "--compress", help="Compress", action="store_true", default=True)
     args = p.parse_args(args=collect_args)
 
     level = logging.WARNING

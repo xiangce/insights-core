@@ -1,6 +1,7 @@
 '''
 Module responsible for running the --support option for collecting debug information
 '''
+
 from __future__ import absolute_import
 import logging
 import shlex
@@ -15,7 +16,12 @@ from subprocess import Popen, PIPE, STDOUT
 
 from .constants import InsightsConstants as constants
 from .connection import InsightsConnection
-from .utilities import machine_id_exists, write_registered_file, write_unregistered_file, write_to_disk
+from .utilities import (
+    machine_id_exists,
+    write_registered_file,
+    write_unregistered_file,
+    write_to_disk,
+)
 
 APP_NAME = constants.app_name
 logger = logging.getLogger(__name__)
@@ -50,10 +56,12 @@ def _legacy_registration_check(api_reg_status):
         unreg_date = api_reg_status
         api_reg_status = False
 
-    return {'messages': [local_record, api_record],
-            'status': api_reg_status,
-            'unreg_date': unreg_date,
-            'unreachable': unreachable}
+    return {
+        'messages': [local_record, api_record],
+        'status': api_reg_status,
+        'unreg_date': unreg_date,
+        'unreachable': unreachable,
+    }
 
 
 def registration_check(pconn):
@@ -85,6 +93,7 @@ class InsightsSupport(object):
     '''
     Build the support logfile
     '''
+
     def __init__(self, config):
         self.config = config
 
@@ -93,15 +102,11 @@ class InsightsSupport(object):
         self._support_diag_dump()
         logger.info('Copying Insights logs to archive...')
         log_archive_dir = tempfile.mkdtemp(prefix='/var/tmp/')
-        tar_file = os.path.join(log_archive_dir,
-                                'insights-client-logs-' +
-                                time.strftime('%Y%m%d%H%M%S') +
-                                '.tar.gz')
-        tar_cmd = 'tar czfS {0} -C {1} .'.format(
-            tar_file,
-            constants.log_dir)
-        subprocess.call(shlex.split(tar_cmd),
-                        stderr=subprocess.PIPE)
+        tar_file = os.path.join(
+            log_archive_dir, 'insights-client-logs-' + time.strftime('%Y%m%d%H%M%S') + '.tar.gz'
+        )
+        tar_cmd = 'tar czfS {0} -C {1} .'.format(tar_file, constants.log_dir)
+        subprocess.call(shlex.split(tar_cmd), stderr=subprocess.PIPE)
         logger.info('Support information collected in %s', tar_file)
 
     def _support_diag_dump(self):
@@ -133,9 +138,7 @@ class InsightsSupport(object):
 
         cfg_block.append('auto_config: ' + str(self.config.auto_config))
         if self.config.proxy:
-            obfuscated_proxy = re.sub(r'(.*)(:)(.*)(@.*)',
-                                      r'\1\2********\4',
-                                      self.config.proxy)
+            obfuscated_proxy = re.sub(r'(.*)(:)(.*)(@.*)', r'\1\2********\4', self.config.proxy)
         else:
             obfuscated_proxy = 'None'
         cfg_block.append('proxy: ' + obfuscated_proxy)
@@ -151,21 +154,23 @@ class InsightsSupport(object):
                 logger.info('Connection test: FAIL\n')
 
         # run commands
-        commands = ['uname -a',
-                    'cat /etc/redhat-release',
-                    'env',
-                    'sestatus',
-                    'subscription-manager identity',
-                    'systemctl cat insights-client.timer',
-                    'systemctl cat insights-client.service',
-                    'systemctl status insights-client.timer',
-                    'systemctl status insights-client.service']
+        commands = [
+            'uname -a',
+            'cat /etc/redhat-release',
+            'env',
+            'sestatus',
+            'subscription-manager identity',
+            'systemctl cat insights-client.timer',
+            'systemctl cat insights-client.service',
+            'systemctl status insights-client.timer',
+            'systemctl status insights-client.service',
+        ]
         for cmd in commands:
             logger.info("Running command: %s", cmd)
             try:
                 proc = Popen(
-                    shlex.split(cmd), shell=False, stdout=PIPE, stderr=STDOUT,
-                    close_fds=True)
+                    shlex.split(cmd), shell=False, stdout=PIPE, stderr=STDOUT, close_fds=True
+                )
                 stdout, stderr = proc.communicate()
             except OSError as o:
                 if 'systemctl' not in cmd:
@@ -178,8 +183,11 @@ class InsightsSupport(object):
         # check available disk space for /var/tmp
         tmp_dir = '/var/tmp'
         dest_dir_stat = os.statvfs(tmp_dir)
-        dest_dir_size = (dest_dir_stat.f_bavail * dest_dir_stat.f_frsize)
-        logger.info('Available space in %s:\t%s bytes\t%.1f 1K-blocks\t%.1f MB',
-                    tmp_dir, dest_dir_size,
-                    dest_dir_size / 1024.0,
-                    (dest_dir_size / 1024.0) / 1024.0)
+        dest_dir_size = dest_dir_stat.f_bavail * dest_dir_stat.f_frsize
+        logger.info(
+            'Available space in %s:\t%s bytes\t%.1f 1K-blocks\t%.1f MB',
+            tmp_dir,
+            dest_dir_size,
+            dest_dir_size / 1024.0,
+            (dest_dir_size / 1024.0) / 1024.0,
+        )
