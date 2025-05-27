@@ -343,7 +343,12 @@ def main():
 
     logging.basicConfig(level=level)
 
-    out_path = args.out_path or tempfile.gettempdir()
+    if args.out_path:
+        out_path = args.out_path
+    elif "COLLECTION_DIRECTORY" in os.environ:
+        out_path = os.environ["COLLECTION_DIRECTORY"]
+    else:
+        out_path = tempfile.gettempdir()
     archive, errors = collect(
         output_dir=out_path,
         archive_name=generate_archive_name(config),
