@@ -13,6 +13,7 @@ import argparse
 import logging
 import os
 import sys
+import six
 import tempfile
 import yaml
 import uuid
@@ -30,6 +31,7 @@ from insights.util import fs, utc
 from insights.util.hostname import determine_hostname
 from insights.util.subproc import call
 
+LOG_FORMAT = "%(asctime)s %(levelname)8s %(name)s:%(lineno)s %(message)s"
 log = logging.getLogger(__name__)
 
 EXCEPTIONS_TO_REPORT = set([OSError])
@@ -306,6 +308,57 @@ def _parse_broker_exceptions(broker, exceptions_to_report):
     return errors
 
 
+def get_console_handler(config):
+    if config.silent:
+        target_level = logging.FATAL
+    elif config.verbose:
+        target_level = logging.DEBUG
+    elif config.quiet:
+        target_level = logging.ERROR
+    else:
+        target_level = logging.INFO
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(target_level)
+
+    log_format = LOG_FORMAT if config.verbose else "%(message)s"
+    handler.setFormatter(logging.Formatter(log_format))
+
+    return handler
+
+
+def configure_level(config):
+    config_level = 'DEBUG' if config.verbose else config.loglevel
+
+    init_log_level = logging.getLevelName(config_level)
+    if type(init_log_level) in six.string_types:
+        print("Invalid log level %s, defaulting to DEBUG" % config_level)
+        init_log_level = logging.DEBUG
+
+    log.setLevel(init_log_level)
+    logging.root.setLevel(init_log_level)
+
+    if not config.verbose:
+        logging.getLogger('insights.core.dr').setLevel(logging.WARNING)
+
+
+def set_up_logging(config, args):
+    if args:
+        level = logging.WARNING
+        if args.verbose:
+            level = logging.INFO
+        if args.debug:
+            level = logging.DEBUG
+        if args.quiet:
+            level = logging.ERROR
+        logging.basicConfig(level=level)
+
+    if len(logging.root.handlers) == 0:
+        logging.root.addHandler(get_console_handler(config))
+        configure_level(config)
+        log.debug("Logging initialized")
+
+
 def main():
     # Remove command line args so that they are not parsed by any called modules
     # The main fxn is only invoked as a cli, if calling from another cli then
@@ -333,15 +386,7 @@ def main():
     p.add_argument("-c", "--compress", help="Compress", action="store_true", default=True)
     args = p.parse_args(args=collect_args)
 
-    level = logging.WARNING
-    if args.verbose:
-        level = logging.INFO
-    if args.debug:
-        level = logging.DEBUG
-    if args.quiet:
-        level = logging.ERROR
-
-    logging.basicConfig(level=level)
+    set_up_logging(config, args)
 
     if args.out_path:
         out_path = args.out_path
