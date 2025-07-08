@@ -1,0 +1,10 @@
+include insights
+include insights/COMMIT
+include insights/NAME
+include insights/RELEASE
+include insights/VERSION
+prune examples
+prune insights/tests
+prune insights/parsr/examples
+prune insights/parsr/tests
+prune insights/parsr/query/tests
