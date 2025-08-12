@@ -3,11 +3,9 @@
 %global modulename insights_core
 %global selinux_policy_version 42.1.1
 %global selinuxtype targeted
-# %global with_selinux 1  # Build with `insights-core-selinux`
-# %global for_internal 1  # Build insights-core for internal usage
 
 Name:           insights-core
-Version:        3.6.3
+Version:        3.8.0
 Release:        1%{?dist}
 Summary:        Insights Core is a data collection and analysis framework.
 
@@ -125,6 +123,9 @@ install -D -p -m 0644 %{name}-selinux-%{version}/%{modulename}.if %{buildroot}%{
 %endif
 
 %changelog
+* Tue Aug 12 2025 Xiangce Liu <xiangceliu@redhat.com> 3.8.0-1
+- feat: new script to build insights-core RPM (xiangceliu@redhat.com)
+
 * Thu Aug 07 2025 Xiangce Liu <xiangceliu@redhat.com> 3.6.3-1
 - feat(client): Exclude vendor libs from coverage stats (#4520)
   (pschrimp@redhat.com)
