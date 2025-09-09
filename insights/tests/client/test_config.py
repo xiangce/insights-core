@@ -27,6 +27,7 @@ def test_config_load_legacy_ignored(open_):
     open_.return_value = TextIOWrapper(
         BytesIO(b'[insights-client]\nusername=CASVAL\n' b'[redhat-access-insights]\nusername=SAYLA')
     )
+
     c = InsightsConfig()
     c._load_config_file()
     assert c.username == 'CASVAL'
@@ -121,9 +122,10 @@ def test_env_https_proxy_no_warning():
     with patch('insights.client.config.logger') as logger:
         c = InsightsConfig(_print_errors=True)
         c._load_env()
+
         logger.warning.assert_not_called()
 
-
+        
 @mark.parametrize(
     ("config",),
     (
@@ -134,6 +136,8 @@ def test_env_https_proxy_no_warning():
         ({"checkin": True},),
     ),
 )
+
+
 @patch('insights.client.config.argparse.ArgumentParser.parse_args')
 def test_implied_non_legacy_upload(_, config):
     '''

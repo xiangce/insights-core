@@ -58,6 +58,7 @@ DEFAULT_OBFUSCATIONS = {
 }
 
 
+
 class Cleaner(object):
     """
     Class to clean the content of Specs according to the user configuration and
