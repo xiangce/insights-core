@@ -1,9 +1,8 @@
 import pytest
-import sys
 import os
 from io import TextIOWrapper, BytesIO
 from insights.client.config import InsightsConfig, DEFAULT_OPTS
-from mock.mock import patch
+from mock.mock import patch, Mock
 from pytest import mark
 
 
@@ -87,46 +86,46 @@ def test_env_number_bad_values():
 
 @patch('insights.client.config.os.environ', {})
 def test_env_no_proxy_no_warning():
-    with patch('insights.client.config.sys.stdout.write') as write:
+    with patch('insights.client.config.logger') as logger:
         c = InsightsConfig(_print_errors=True)
         c._load_env()
-        write.assert_not_called()
+        logger.warning.assert_not_called()
 
 
 @patch('insights.client.config.os.environ', {'HTTP_PROXY': '127.0.0.1'})
 def test_env_http_proxy_warning():
-    with patch('insights.client.config.sys.stdout.write') as write:
+    with patch('insights.client.config.logger') as logger:
         c = InsightsConfig(_print_errors=True)
         c._load_env()
-        write.assert_called_once()
+        logger.warning.assert_called_once()
 
 
 @patch('insights.client.config.os.environ', {'HTTP_PROXY': '127.0.0.1'})
 @pytest.mark.parametrize(("kwargs",), (({},), ({"_print_errors": False},)))
 def test_env_http_proxy_no_warning(kwargs):
-    with patch('insights.client.config.sys.stdout.write') as write:
+    with patch('insights.client.config.logger') as logger:
         c = InsightsConfig(**kwargs)
         c._load_env()
-        write.assert_not_called()
+        logger.warning.assert_not_called()
 
 
 @patch('insights.client.config.os.environ', {'HTTP_PROXY': '127.0.0.1', 'HTTPS_PROXY': '127.0.0.1'})
 def test_env_http_and_https_proxy_no_warning():
-    with patch('insights.client.config.sys.stdout.write') as write:
+    with patch('insights.client.config.logger') as logger:
         c = InsightsConfig(_print_errors=True)
         c._load_env()
-        write.assert_not_called()
+        logger.warning.assert_not_called()
 
 
 @patch('insights.client.config.os.environ', {'HTTPS_PROXY': '127.0.0.1'})
 def test_env_https_proxy_no_warning():
-    with patch('insights.client.config.sys.stdout.write') as write:
+    with patch('insights.client.config.logger') as logger:
         c = InsightsConfig(_print_errors=True)
         c._load_env()
-        write.assert_not_called()
 
+        logger.warning.assert_not_called()
 
-# empty argv so parse_args isn't polluted with pytest arguments
+        
 @mark.parametrize(
     ("config",),
     (
@@ -137,8 +136,10 @@ def test_env_https_proxy_no_warning():
         ({"checkin": True},),
     ),
 )
-@patch('insights.client.config.sys.argv', [sys.argv[0]])
-def test_implied_non_legacy_upload(config):
+
+
+@patch('insights.client.config.argparse.ArgumentParser.parse_args')
+def test_implied_non_legacy_upload(_, config):
     '''
     Some arguments should always imply legacy_upload=False.
     '''
@@ -147,9 +148,8 @@ def test_implied_non_legacy_upload(config):
     assert c.legacy_upload is False
 
 
-# empty argv so parse_args isn't polluted with pytest arguments
-@patch('insights.client.config.sys.argv', [sys.argv[0]])
-def test_to_json_quiet_implies_diagnosis():
+@patch('insights.client.config.argparse.ArgumentParser.parse_args')
+def test_to_json_quiet_implies_diagnosis(_):
     '''
     --diagnosis should always imply legacy_upload=False
     '''
@@ -179,9 +179,8 @@ def test_offline_disables_options():
         InsightsConfig(unregister=True, offline=True)
 
 
-# empty argv so parse_args isn't polluted with pytest arguments
-@patch('insights.client.config.sys.argv', [sys.argv[0]])
-def test_output_dir_file_cant_use_both():
+@patch('insights.client.config.argparse.ArgumentParser.parse_args')
+def test_output_dir_file_cant_use_both(_):
     '''
     Cannot supply both --output-file and --output-dir
     '''
@@ -190,9 +189,8 @@ def test_output_dir_file_cant_use_both():
         c.load_all()
 
 
-# empty argv so parse_args isn't polluted with pytest arguments
-@patch('insights.client.config.sys.argv', [sys.argv[0]])
-def test_output_dir_file_validate():
+@patch('insights.client.config.argparse.ArgumentParser.parse_args')
+def test_output_dir_file_validate(_):
     '''
     Must supply non-empty strings for --output-dir or --output-file
     '''
@@ -204,9 +202,8 @@ def test_output_dir_file_validate():
         c.load_all()
 
 
-# empty argv so parse_args isn't polluted with pytest arguments
-@patch('insights.client.config.sys.argv', [sys.argv[0]])
-def test_output_dir_file_implies_no_upload_true_keep_archive_false():
+@patch('insights.client.config.argparse.ArgumentParser.parse_args')
+def test_output_dir_file_implies_no_upload_true_keep_archive_false(_):
     '''
     Using --output-dir or --tar-file should imply:
         no-upload    == True,  because we don't want to upload
@@ -222,9 +219,8 @@ def test_output_dir_file_implies_no_upload_true_keep_archive_false():
     assert not c.keep_archive
 
 
-# empty argv so parse_args isn't polluted with pytest arguments
-@patch('insights.client.config.sys.argv', [sys.argv[0]])
-def test_compressor_option_validate():
+@patch('insights.client.config.argparse.ArgumentParser.parse_args')
+def test_compressor_option_validate(_):
     '''
     Compressor options are validated in config.py
     (used to be in archive.py)
@@ -240,9 +236,8 @@ def test_compressor_option_validate():
     assert c.compressor == 'gz'
 
 
-# empty argv so parse_args isn't polluted with pytest arguments
-@patch('insights.client.config.sys.argv', [sys.argv[0]])
-def test_output_file_guess_file_ext():
+@patch('insights.client.config.argparse.ArgumentParser.parse_args')
+def test_output_file_guess_file_ext(_):
     '''
     If --output-file is selected, automatically guess
     the compressor option based on the file extension.
@@ -280,8 +275,8 @@ def test_output_file_guess_file_ext():
     assert c.compressor == 'none'
 
 
-@patch('insights.client.config.sys.argv', [sys.argv[0], "--status"])
-def test_command_line_parse_twice():
+@patch('insights.client.config.argparse.ArgumentParser.parse_args', return_value=Mock(status=True))
+def test_command_line_parse_twice(_):
     '''
     Verify that running _load_command_line() twice does not
     raise an argparse error.

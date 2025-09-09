@@ -21,7 +21,7 @@ specs during collection according to the user configuration and specs setting.
   target from the obfuscation.  Currently, the supported obfuscation target
   are:
   * hostname
-  * ip (ipv4)
+  * ipv4
   * ipv6
   * keyword
   * mac
@@ -32,6 +32,7 @@ import logging
 import json
 import os
 import six
+import tempfile
 
 from insights.cleaner.filters import AllowFilter
 from insights.cleaner.hostname import Hostname
@@ -47,7 +48,15 @@ from insights.util.posix_regex import replace_posix
 
 logger = logging.getLogger(__name__)
 MAX_LINE_LENGTH = 1048576  # 1MB
-DEFAULT_OBFUSCATIONS = { 'hostname', 'ip',  'ipv6', 'keyword', 'mac', 'password', }
+DEFAULT_OBFUSCATIONS = {
+    'hostname',
+    'ipv4',
+    'ipv6',
+    'keyword',
+    'mac',
+    'password',
+}
+
 
 
 class Cleaner(object):
@@ -57,7 +66,7 @@ class Cleaner(object):
     """
 
     def __init__(self, config, rm_conf, fqdn=None):
-        self.report_dir = '/tmp'  # FIXME
+        self.report_dir = tempfile.gettempdir()
         self.rhsm_facts_file = getattr(
             config, 'rhsm_facts_file', os.path.join(self.report_dir, 'insights-client.facts')
         )
@@ -74,7 +83,7 @@ class Cleaner(object):
             'allow_filter': AllowFilter(),
         }
         # - Keyword and Password Replacement
-        #   They Do NOT depend on "obfuscate=True"
+        #   They Do NOT depend on "obfuscation_list"
         keywords = rm_conf.get('keywords')
         self.obfuscate = {
             'keyword': Keyword(keywords) if keywords else None,
@@ -82,19 +91,16 @@ class Cleaner(object):
         }
 
         self.fqdn = fqdn if fqdn else determine_hostname()
-        if config and config.obfuscate:
+        obfs = config.obfuscation_list if config else None
+        if config and obfs:
             # - IPv4 obfuscation
-            self.obfuscate.update(ip=IPv4())
+            self.obfuscate.update(ipv4=IPv4()) if 'ipv4' in obfs else None
             # - IPv6 obfuscation
-            self.obfuscate.update(ipv6=IPv6()) if config.obfuscate_ipv6 else None
+            self.obfuscate.update(ipv6=IPv6()) if 'ipv6' in obfs else None
             # - Hostname obfuscation
-            (
-                self.obfuscate.update(hostname=Hostname(self.fqdn))
-                if config.obfuscate_hostname
-                else None
-            )
+            self.obfuscate.update(hostname=Hostname(self.fqdn)) if 'hostname' in obfs else None
             # - MAC obfuscation
-            self.obfuscate.update(mac=Mac()) if config.obfuscate_mac else None
+            self.obfuscate.update(mac=Mac()) if 'mac' in obfs else None
 
     def clean_content(self, lines, no_obfuscate=None, no_redact=False, allowlist=None, width=False):
         """
@@ -200,7 +206,7 @@ class Cleaner(object):
         keyword = self.obfuscate.get('keyword')
         kw_mapping = keyword.mapping() if keyword else []
 
-        ipv4 = self.obfuscate.get('ip')
+        ipv4 = self.obfuscate.get('ipv4')
         ipv4_mapping = ipv4.mapping() if ipv4 else []
 
         ipv6 = self.obfuscate.get('ipv6')
@@ -211,7 +217,7 @@ class Cleaner(object):
 
         facts = {
             'insights_client.hostname': self.fqdn,
-            'insights_client.obfuscate_ipv4_enabled': 'ip' in self.obfuscate,
+            'insights_client.obfuscate_ipv4_enabled': 'ipv4' in self.obfuscate,
             'insights_client.obfuscate_ipv6_enabled': 'ipv6' in self.obfuscate,
             'insights_client.obfuscate_hostname_enabled': 'hostname' in self.obfuscate,
             'insights_client.obfuscate_mac_enabled': 'mac' in self.obfuscate,

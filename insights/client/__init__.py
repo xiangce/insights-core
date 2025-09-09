@@ -120,7 +120,7 @@ class InsightsClient(object):
             else:
                 raise ConnectionError("%s: %s" % (response.status_code, response.reason))
         except ConnectionError as e:
-            logger.warning("Unable to fetch egg url %s: %s. Defaulting to /release", url, str(e))
+            logger.debug("Unable to fetch egg url %s: %s. Defaulting to /release", url, str(e))
             return '/release'
 
     def fetch(self, force=False):
@@ -546,36 +546,17 @@ class InsightsClient(object):
         if content is None:
             raise Exception("Error: failed to download advisor report.")
 
+    @_net
     def show_results(self):
         '''
         Show insights about this machine
         '''
-        try:
-            with open("/var/lib/insights/insights-details.json", mode="r+b") as f:
-                insights_data = json.load(f)
-            print(json.dumps(insights_data, indent=1))
-        except IOError as e:
-            if e.errno == errno.ENOENT:
-                raise Exception("Error: no report found. Run insights-client --check-results to update the report cache: %s" % e)
-            else:
-                raise e
-
-    def show_inventory_deep_link(self):
-        """
-        Show a deep link to this host inventory record
-        """
-        system = self.connection._fetch_system_by_machine_id()
-        if system:
-            try:
-                id = system["id"]
-                logger.info("View details about this system on console.redhat.com:")
-                logger.info(
-                    "https://console.redhat.com/insights/inventory/{0}".format(id)
-                )
-            except Exception as e:
-                logger.error(
-                    "Error: malformed system record: {0}: {1}".format(system, e)
-                )
+        content = self.connection.get_latest_advisor_report()
+        if content is None:
+            raise Exception("Could not get latest advisor report.\n"
+                            "This host is not registered. Use --register to register this host:\n"
+                            "# insights-client --register")
+        print(json.dumps(content, indent=1))
 
     def copy_to_output_dir(self, insights_archive):
         '''
@@ -663,17 +644,6 @@ class InsightsClient(object):
             return None
 
         return self.connection.checkin()
-
-
-def format_config(config):
-    # Log config except the password
-    # and proxy as it might have a pw as well
-    config_copy = config.copy()
-    try:
-        del config_copy["password"]
-        del config_copy["proxy"]
-    finally:
-        return json.dumps(config_copy, indent=4)
 
 
 def _init_client_config_dirs():

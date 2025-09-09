@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytest
-from insights.parsers.rpm_vercmp import _rpm_vercmp
+from insights.util.rpm_vercmp import _rpm_vercmp, version_compare
 
 
 # data copied from
@@ -161,7 +161,9 @@ dnl RPMVERCMP(1.1.ββ, 1.1.αα, 0)
 def convert(data):
     f = "RPMVERCMP("
     lines = [l for l in data.splitlines() if f in l]
-    tuples = [tuple(c.strip() for c in l[len(f) + l.find(f):].rstrip(")").split(",")) for l in lines]
+    tuples = [
+        tuple(c.strip() for c in l[len(f) + l.find(f) :].rstrip(")").split(",")) for l in lines
+    ]
     return [(l, r, int(i)) for (l, r, i) in tuples]
 
 
@@ -174,3 +176,14 @@ def test_rpm_vercmp(rpm_data):
     for l, r, expected in rpm_data:
         actual = _rpm_vercmp(l, r)
         assert actual == expected, (l, r, actual, expected)
+
+
+def test_version_compare():
+    rpm1 = 'kernel-rt-debug-3.10.0-327.rt56.204.el7_2.1'
+    rpm2 = 'kernel-rt-debug-3.10.0-327.rt56.204.el7_2.2'
+    rpm3 = 'kernel-3.10.0-327.10.1.el7'
+    rpm4 = 'kernel-3.10.0-327.el7'
+    rpm5 = 'kernel-3.10.1-327.el7'
+    assert version_compare(rpm1, rpm2) == -1
+    assert version_compare(rpm3, rpm4) == 1
+    assert version_compare(rpm4, rpm5) == -1

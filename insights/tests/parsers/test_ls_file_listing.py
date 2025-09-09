@@ -2,7 +2,7 @@
 import doctest
 
 from insights.parsers import ls as ls_module
-from insights.parsers.ls import FileListing
+from insights.parsers.ls import FileListing, LSlan, LSlHFiles
 from insights.tests import context_wrap
 
 SINGLE_DIRECTORY = """
@@ -28,6 +28,7 @@ drwxr-xr-x.  2 0 0    6 Sep 16  2015 console
 -rw-------.  1 0 0 1390 Mar  4  2014 ebtables-config
 -rw-r--r--.  1 0 0   72 Sep 15  2015 firewalld
 lrwxrwxrwx.  1 0 0   17 Jul  6 23:32 grub -> /etc/default/grub
+lrwxrwxrwx.  1 0 0   17 Jul  6 23:32 grubX
 
 /etc/rc.d/rc3.d:
 total 4
@@ -131,6 +132,14 @@ FILE_LISTING_DOC = '''
         lrwxrwxrwx.  1 0 0   17 Jul  6 23:32 grub -> /etc/default/grub
 '''
 
+LS_FILE_PERMISSIONS_DOC = '''
+/bin/ls: cannot access /boot/grub/grub.conf: No such file or directory
+/bin/ls: cannot access fstab_mounted.devices: No such file or directory
+/bin/ls: cannot access pvs.devices: No such file or directory
+-rw-r--r--. 1 root  root      46 Apr 24  2024 /etc/redhat-release
+-rw-r--r--. 1 liuxc wheel 664118 Feb 20 14:40 /var/log/messages
+brw-rw----. 1 root  disk 252, 1 May 16 01:30 /dev/vda1
+'''
 # Note - should we test for anomalous but parseable entries?  E.g. block
 # devices without a major/minor number?  Or non-devices that have a comma in
 # the size?  Permissions that don't make sense?  Dates that don't make sense
@@ -166,7 +175,7 @@ def test_multiple_directories():
     esc = dirs['/etc/sysconfig']
     assert sorted(esc.keys()) == sorted(['entries', 'files', 'dirs', 'specials', 'total', 'name'])
 
-    assert dirs.files_of('/etc/sysconfig') == ['ebtables-config', 'firewalld', 'grub']
+    assert dirs.files_of('/etc/sysconfig') == ['ebtables-config', 'firewalld', 'grub', 'grubX']
     assert dirs.dirs_of('/etc/sysconfig') == ['.', '..', 'cbq', 'console']
     assert dirs.specials_of('/etc/sysconfig') == []
     assert dirs.files_of('non-exist') == []
@@ -188,7 +197,6 @@ def test_multiple_directories():
         'size': 8192,
         'date': 'Jul 13 03:55',
         'name': '..',
-        'raw_entry': 'drwxr-xr-x. 77 0 0 8192 Jul 13 03:55 ..',
         'dir': '/etc/sysconfig',
     }
     assert listing['cbq'] == {
@@ -200,7 +208,6 @@ def test_multiple_directories():
         'size': 41,
         'date': 'Jul  6 23:32',
         'name': 'cbq',
-        'raw_entry': 'drwxr-xr-x.  2 0 0   41 Jul  6 23:32 cbq',
         'dir': '/etc/sysconfig',
     }
     assert listing['firewalld'] == {
@@ -212,7 +219,6 @@ def test_multiple_directories():
         'size': 72,
         'date': 'Sep 15  2015',
         'name': 'firewalld',
-        'raw_entry': '-rw-r--r--.  1 0 0   72 Sep 15  2015 firewalld',
         'dir': '/etc/sysconfig',
     }
     assert listing['grub'] == {
@@ -225,7 +231,6 @@ def test_multiple_directories():
         'date': 'Jul  6 23:32',
         'name': 'grub',
         'link': '/etc/default/grub',
-        'raw_entry': 'lrwxrwxrwx.  1 0 0   17 Jul  6 23:32 grub -> /etc/default/grub',
         'dir': '/etc/sysconfig',
     }
 
@@ -239,7 +244,6 @@ def test_multiple_directories():
         'size': 4096,
         'date': 'Sep 16  2015',
         'name': '..',
-        'raw_entry': 'drwxr-xr-x. 10 0 0 4096 Sep 16  2015 ..',
         'dir': '/etc/rc.d/rc3.d',
     }
     assert listing['K50netconsole'] == {
@@ -252,7 +256,6 @@ def test_multiple_directories():
         'date': 'Jul  6 23:32',
         'name': 'K50netconsole',
         'link': '../init.d/netconsole',
-        'raw_entry': 'lrwxrwxrwx.  1 0 0   20 Jul  6 23:32 K50netconsole -> ../init.d/netconsole',
         'dir': '/etc/rc.d/rc3.d',
     }
 
@@ -270,7 +273,6 @@ def test_multiple_directories():
         'date': 'Jul  6 23:32',
         'name': 'grub',
         'link': '/etc/default/grub',
-        'raw_entry': 'lrwxrwxrwx.  1 0 0   17 Jul  6 23:32 grub -> /etc/default/grub',
         'dir': '/etc/sysconfig',
     }
 
@@ -283,7 +285,6 @@ def test_multiple_directories():
         'size': 41,
         'date': 'Jul  6 23:32',
         'name': 'cbq',
-        'raw_entry': 'drwxr-xr-x.  2 0 0   41 Jul  6 23:32 cbq',
         'dir': '/etc/sysconfig',
     }
     assert dirs.path_entry('no_slash') is None
@@ -310,6 +311,10 @@ def test_raw_entry_of_permissions_of():
     raw_entry = 'lrwxrwxrwx. 1 0 0 17 Jul  6 23:32 grub -> /etc/default/grub'
     assert dirs.raw_entry_of('/etc/sysconfig', 'grub') == raw_entry
     assert dirs.permissions_of('/etc/sysconfig', 'grub').line == raw_entry
+    # abnormal case, no '->' for links
+    raw_entry = 'lrwxrwxrwx. 1 0 0 17 Jul  6 23:32 grubX'
+    assert dirs.raw_entry_of('/etc/sysconfig', 'grubX') == raw_entry
+    assert dirs.permissions_of('/etc/sysconfig', 'grubX').line == raw_entry
     # no such target file
     dirs.raw_entry_of('/etc/sysconfig', 'test') is None
     dirs.permissions_of('/etc/sysconfig', 'test') is None
@@ -357,7 +362,6 @@ def test_complicated_directory():
         'date': 'Aug  4 16:56',
         'name': 'dm-10',
         'dir': '/tmp',
-        'raw_entry': 'brw-rw----.  1 0 6 253,  10 Aug  4 16:56 dm-10',
     }
     assert listing['dm-10']['type'] == 'b'
     assert listing['dm-10']['major'] == 253
@@ -407,7 +411,6 @@ def test_selinux_directory():
         'se_type': 'boot_t',
         'se_mls': 's0',
         'name': 'grub2',
-        'raw_entry': 'drwxr-xr-x. root root system_u:object_r:boot_t:s0      grub2',
         'dir': '/boot',
     }
     actual = dirs.dir_entry('/boot', 'grub2')
@@ -423,7 +426,6 @@ def test_files_created_with_selinux_disabled():
         'name': 'lv_cpwtk001_data01',
         'links': 1,
         'perms': 'rwxrwxrwx',
-        'raw_entry': 'lrwxrwxrwx 1 0 0 7 Apr 27 05:34 lv_cpwtk001_data01 -> ../dm-7',
         'owner': '0',
         'link': '../dm-7',
         'date': 'Apr 27 05:34',
@@ -434,6 +436,9 @@ def test_files_created_with_selinux_disabled():
 
 
 def test_doc_example():
-    env = {'ls_lan': FileListing(context_wrap(FILE_LISTING_DOC))}
+    env = {
+        'ls_lan': LSlan(context_wrap(FILE_LISTING_DOC)),
+        'ls_files': LSlHFiles(context_wrap(LS_FILE_PERMISSIONS_DOC)),
+    }
     failed, total = doctest.testmod(ls_module, globs=env)
     assert failed == 0

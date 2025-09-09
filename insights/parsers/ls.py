@@ -30,13 +30,17 @@ LSlaRZ - command ``ls -lanRZ <dirs>``
 
 LSlaZ - command ``ls -lanZ <dirs>``
 -----------------------------------
+
+LSlHFiles - spec ``ls_files`` -  command ``ls -lH  <files>``
+------------------------------------------------------------
 """
 
 from insights.core import ls_parser, CommandParser
+from insights.core.exceptions import SkipComponent
 from insights.core.filters import add_filter
+from insights.core.ls_parser import FilePermissions
 from insights.core.plugins import parser
 from insights.specs import Specs
-from insights.util.file_permissions import FilePermissions
 
 # Required basic filters for `LS` specs that the content needs to be filtered
 add_filter(Specs.ls_la_filtered, ['total '])
@@ -77,7 +81,7 @@ class FileListing(CommandParser, dict):
         - the name, and link destination if it's a symlink
 
     .. note::
-        The :class:`FileListing` Parser parses the content collected by
+        The :class:`FileListing` parses the content collected by
         diffirent ``ls_*`` specs. The ``ls_*`` specs collect the corresponding
         ``ls`` command output according to the filters defined by the relevant
         ``ls_*_dirs`` specs.  For the ``ls_*_dirs`` specs, only absolute
@@ -107,7 +111,7 @@ class FileListing(CommandParser, dict):
         >>> from insights.specs import Specs
         >>> add_filter(Specs.ls_lan_dirs, ['/boot', '/etc/sysconfig'])
         >>> type(ls_lan)
-        <class 'insights.parsers.ls.FileListing'>
+        <class 'insights.parsers.ls.LSlan'>
         >>> "/etc" in ls_lan
         False
         >>> "/etc/sysconfig" in ls_lan
@@ -122,11 +126,11 @@ class FileListing(CommandParser, dict):
         []
         >>> ls_lan.total_of("/etc/sysconfig")
         96
-        >>> ls_lan.dir_entry('/etc/sysconfig', 'grub') == {'group': '0', 'name': 'grub', 'links': 1, 'perms': 'rwxrwxrwx.', 'raw_entry': 'lrwxrwxrwx.  1 0 0   17 Jul  6 23:32 grub -> /etc/default/grub', 'owner': '0', 'link': '/etc/default/grub', 'date': 'Jul  6 23:32', 'type': 'l', 'dir': '/etc/sysconfig', 'size': 17}
+        >>> ls_lan.dir_entry('/etc/sysconfig', 'grub') == {'group': '0', 'name': 'grub', 'links': 1, 'perms': 'rwxrwxrwx.', 'owner': '0', 'link': '/etc/default/grub', 'date': 'Jul  6 23:32', 'type': 'l', 'dir': '/etc/sysconfig', 'size': 17}
         True
         >>> sorted(ls_lan.listing_of("/etc/sysconfig").keys()) == sorted(['console', 'grub', '..', 'firewalld', '.', 'cbq', 'ebtables-config'])
         True
-        >>> sorted(ls_lan.listing_of("/etc/sysconfig")['console'].keys()) == sorted(['group', 'name', 'links', 'perms', 'raw_entry', 'owner', 'date', 'type', 'dir', 'size'])
+        >>> sorted(ls_lan.listing_of("/etc/sysconfig")['console'].keys()) == sorted(['group', 'name', 'links', 'perms', 'owner', 'date', 'type', 'dir', 'size'])
         True
         >>> ls_lan.listing_of("/etc/sysconfig")['console']['type']
         'd'
@@ -134,7 +138,7 @@ class FileListing(CommandParser, dict):
         'rwxr-xr-x.'
         >>> ls_lan.dir_contains("/etc/sysconfig", "console")
         True
-        >>> ls_lan.dir_entry("/etc/sysconfig", "console") == {'group': '0', 'name': 'console', 'links': 2, 'perms': 'rwxr-xr-x.', 'raw_entry': 'drwxr-xr-x.  2 0 0    6 Sep 16  2015 console', 'owner': '0', 'date': 'Sep 16  2015', 'type': 'd', 'dir': '/etc/sysconfig', 'size': 6}
+        >>> ls_lan.dir_entry("/etc/sysconfig", "console") == {'group': '0', 'name': 'console', 'links': 2, 'perms': 'rwxr-xr-x.', 'owner': '0', 'date': 'Sep 16  2015', 'type': 'd', 'dir': '/etc/sysconfig', 'size': 6}
         True
         >>> ls_lan.dir_entry("/etc/sysconfig", "grub")['type']
         'l'
@@ -210,9 +214,9 @@ class FileListing(CommandParser, dict):
         Entries that can be parsed then have fields as described in the class
         description above.
 
-        .. warning::
-            The 'raw_entry' key in the returned dictionary is deprecated
-            and will be removed from version 3.6.0.
+        .. note::
+            The 'raw_entry' key is removed from the return value.  Use the
+            `raw_entry_of` method instead.
         """
         if directory in self:
             return self[directory]['entries']
@@ -289,7 +293,7 @@ class FileListing(CommandParser, dict):
                 if 'date' in tgt:
                     raw_line += ' ' + tgt['date']
                 raw_line += ' ' + tgt['name']
-                if tgt['type'] == 'l':
+                if tgt['type'] == 'l' and 'link' in tgt:
                     raw_line += ' -> ' + tgt['link']
                 return raw_line
 
@@ -399,3 +403,41 @@ class LSlaZ(FileListing):
     """
 
     pass
+
+
+@parser(Specs.ls_files)
+class LSlHFiles(CommandParser, dict):
+    """
+    Parses file information of ``ls -lH`` command.
+
+    .. note::
+
+        To parse a specific file, its full path should be added to the
+        `ls_lH_files` spec via `add_filter`.
+        Only paths point to files are acceptable.
+
+    Examples:
+        >>> from insights.core.filters import add_filter
+        >>> from insights.specs import Specs
+        >>> add_filter(Specs.ls_lH_files, ['/etc/redhat-release', '/var/log/messages'])
+        >>> type(ls_files)
+        <class 'insights.parsers.ls.LSlHFiles'>
+        >>> "/etc/redhat-release" in ls_files
+        True
+        >>> ls_files["/etc/redhat-release"].all_zero()
+        False
+    """
+
+    def parse_content(self, content):
+        self.error_lines = []
+        for line in content:
+            if "ls: cannot access" in line and "No such file or directory" in line:
+                self.error_lines.append(line)
+                continue
+            try:
+                line = line.strip()
+                self[line.rsplit(None, 1)[-1]] = FilePermissions(line)
+            except Exception:
+                pass
+        if not self:
+            raise SkipComponent

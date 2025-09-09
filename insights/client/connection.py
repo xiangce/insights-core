@@ -9,6 +9,7 @@ import six
 import json
 import logging
 import platform
+import sys
 import warnings
 import errno
 # import io
@@ -30,7 +31,8 @@ from .utilities import (determine_hostname,
                         write_registered_file,
                         os_release_info,
                         largest_spec_in_archive,
-                        size_in_mb)
+                        size_in_mb,
+                        _get_rhsm_identity)
 from .cert_auth import rhsmCertificate
 from .constants import InsightsConstants as constants
 from insights import cleaner, package_info
@@ -64,13 +66,31 @@ if os.environ.get('INSIGHTS_DEBUG_HTTP'):
 
 
 def _host_not_found():
-    raise Exception("Error: failed to find host with matching machine-id. Run insights-client --status to check registration status")
+    raise Exception("Error: failed to find host with matching machine-id. "
+                    "Check the registration status:\n"
+                    "# insights-client --status")
 
 
 def _api_request_failed(exception, message='The Insights API could not be reached.'):
     logger.error(exception)
     if message:
         logger.error(message)
+
+
+def _pkg_name_version(name):
+    if sys.version_info >= (3, 10):
+        import importlib.metadata
+        try:
+            pkg = importlib.metadata.distribution(name)
+            return pkg.name, pkg.version
+        except importlib.metadata.PackageNotFoundError:
+            pass
+    else:
+        import pkg_resources
+        pkg = pkg_resources.working_set.find(pkg_resources.Requirement.parse(name))
+        if pkg is not None:
+            return pkg.project_name, pkg.version
+    return None, None
 
 
 class InsightsConnection(object):
@@ -229,11 +249,9 @@ class InsightsConnection(object):
         """
         Generates and returns a string suitable for use as a request user-agent
         """
-        import pkg_resources
-        core_version = "insights-core"
-        pkg = pkg_resources.working_set.find(pkg_resources.Requirement.parse(core_version))
+        pkg, ver = _pkg_name_version("insights-core")
         if pkg is not None:
-            core_version = "%s %s" % (pkg.project_name, pkg.version)
+            core_version = "%s %s" % (pkg, ver)
         else:
             core_version = "Core %s" % package_info["VERSION"]
 
@@ -250,9 +268,9 @@ class InsightsConnection(object):
             parent_process = "unknown"
 
         requests_version = None
-        pkg = pkg_resources.working_set.find(pkg_resources.Requirement.parse("requests"))
+        pkg, ver = _pkg_name_version("requests")
         if pkg is not None:
-            requests_version = "%s %s" % (pkg.project_name, pkg.version)
+            requests_version = "%s %s" % (pkg, ver)
 
         python_version = "%s %s" % (platform.python_implementation(), platform.python_version())
 
@@ -449,10 +467,20 @@ class InsightsConnection(object):
                         req.status_code)
             logger.debug("HTTP Status Text: %s", req.reason)
             if req.status_code == 401:
-                logger.error("Please ensure that the system is registered "
-                             "with RHSM for CERT auth, or that correct "
-                             "credentials are set in %s for BASIC auth.", self.config.conf)
-                logger.log(NETWORK, "HTTP Response Text: %s", req.text)
+                # check if the host is registered with subscription-manager
+                if not _get_rhsm_identity():
+                    logger.error(
+                        "This host is unregistered, please ensure that "
+                        "the system is registered with subscription-manager "
+                        "and then with insights-client.\n"
+                        "\n1. Register with subscription-manager"
+                        "\n# subscription-manager register\n"
+                        "\n2. Register with insights-client"
+                        "\n# insights-client --register"
+                    )
+                    sys.exit(constants.sig_kill_bad)
+                else:
+                    logger.log(NETWORK, "HTTP Response Text: %s", req.text)
             if req.status_code == 402:
                 # failed registration because of entitlement limit hit
                 logger.debug('Registration failed by 402 error.')
@@ -1087,6 +1115,11 @@ class InsightsConnection(object):
         '''
             Retrieve advisor report
         '''
+        if not os.path.isfile(constants.registered_files[0]):
+            raise Exception("Could not retrieve advisor report.\n"
+                            "This host is not registered. Use --register to register this host:\n"
+                            "# insights-client --register")
+
         url = self.inventory_url + "/hosts?insights_id=%s" % generate_machine_id()
         res = self.get(url)
         if res.status_code not in [requests.codes.OK, requests.codes.NOT_MODIFIED]:
@@ -1096,24 +1129,46 @@ class InsightsConnection(object):
         if host_details["total"] < 1:
             _host_not_found()
         if host_details["total"] > 1:
-            raise Exception("Error: multiple hosts detected (insights_id = %s). To fix this error, run command: insights-client --unregister && insights-client --register" % generate_machine_id())
+            raise Exception("Error: multiple hosts detected (insights_id = %s). "
+                            "To fix this error, unregister this host first and then register again.\n"
+                            "\n1. Unregister with insights-client"
+                            "\n# insights-client --unregister\n"
+                            "\n2. Register with insights-client"
+                            "\n# insights-client --register" % generate_machine_id())
 
         if not os.path.exists("/var/lib/insights"):
-            os.makedirs("/var/lib/insights", mode=0o755)
+            os.makedirs("/var/lib/insights", mode=0o750)
 
+        host_id = host_details["results"][0]["id"]
         with open("/var/lib/insights/host-details.json", mode="w+b") as f:
             f.write(res.content)
             logger.debug("Wrote \"/var/lib/insights/host-details.json\"")
 
-        host_id = host_details["results"][0]["id"]
-        url = self.base_url + "/insights/v1/system/%s/reports/" % host_id
+        if self.config.legacy_upload:
+            url = self.base_url + "/v1/system/%s" % host_id
+        else:
+            url = self.base_url + "/insights/v1/system/%s" % host_id
         res = self.get(url)
         if res.status_code not in [requests.codes.OK, requests.codes.NOT_MODIFIED]:
             return None
 
-        with open("/var/lib/insights/insights-details.json", mode="w+b") as f:
-            f.write(res.content)
-            logger.debug("Wrote \"/var/lib/insights/insights-details.json\"")
+        return json.loads(res.content)
+
+    def get_latest_advisor_report(self):
+        '''
+            Retrieve the latest advisor report
+        '''
+        results = self._fetch_system_by_machine_id()
+        if not results:
+            return None
+
+        if self.config.legacy_upload:
+            url = self.base_url + "/platform/insights/v1/system/%s/reports/" % results['id']
+        else:
+            url = self.base_url + "/insights/v1/system/%s/reports/" % results['id']
+        res = self.get(url)
+        if res.status_code not in [requests.codes.OK, requests.codes.NOT_MODIFIED]:
+            return None
 
         return json.loads(res.content)
 
@@ -1124,7 +1179,9 @@ class InsightsConnection(object):
         logger.info("Checking in...")
 
         if not self._fetch_system_by_machine_id():
-            logger.error("This host is not registered. To register, run 'insights-client --register'.")
+            logger.error("This host is not registered. "
+                         "Use --register to register this host:\n"
+                         "# insights-client --register")
             return False
 
         try:

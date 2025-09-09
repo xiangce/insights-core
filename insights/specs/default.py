@@ -270,11 +270,13 @@ class DefaultSpecs(Specs):
     dnf_module_list = simple_command(
         "/usr/bin/dnf -C --noplugins module list", signum=signal.SIGTERM
     )  # used by puptoo
-    docker_info = simple_command("/usr/bin/docker info")
-    docker_list_containers = simple_command("/usr/bin/docker ps --all --no-trunc")
-    docker_list_images = simple_command("/usr/bin/docker images --all --no-trunc --digests")
-    docker_storage_setup = simple_file("/etc/sysconfig/docker-storage-setup")
-    docker_sysconfig = simple_file("/etc/sysconfig/docker")
+    docker_info = simple_command("/usr/bin/docker info")  # v3.7.0
+    docker_list_containers = simple_command("/usr/bin/docker ps --all --no-trunc")  # v3.7.0
+    docker_list_images = simple_command(
+        "/usr/bin/docker images --all --no-trunc --digests"
+    )  # v3.7.0
+    docker_storage_setup = simple_file("/etc/sysconfig/docker-storage-setup")  # v3.7.0
+    docker_sysconfig = simple_file("/etc/sysconfig/docker")  # v3.7.0
     dotnet_version = simple_command("/usr/bin/dotnet --version")
     doveconf = simple_command("/usr/bin/doveconf")
     dracut_kdump_capture_service = simple_file(
@@ -351,7 +353,6 @@ class DefaultSpecs(Specs):
     gluster_v_info = simple_command("/usr/sbin/gluster volume info")
     greenboot_status = simple_command("/usr/libexec/greenboot/greenboot-status")  # used by puptoo
     group_info = command_with_args("/usr/bin/getent group %s", user_group.group_filters)
-    grub1_config_perms = simple_command("/bin/ls -lH /boot/grub/grub.conf")  # RHEL6
     grub2_cfg = simple_file("/boot/grub2/grub.cfg")
     grub2_efi_cfg = simple_file("boot/efi/EFI/redhat/grub.cfg")
     grubby_default_index = simple_command(
@@ -360,9 +361,6 @@ class DefaultSpecs(Specs):
     grubby_default_kernel = simple_command("/sbin/grubby --default-kernel")
     grubby_info_all = simple_command("/usr/sbin/grubby --info=ALL")
     grub_conf = simple_file("/boot/grub/grub.conf")
-    grub_config_perms = simple_command(
-        "/bin/ls -lH /boot/grub2/grub.cfg"
-    )  # only RHEL7 and updwards
     grub_efi_conf = simple_file("/boot/efi/EFI/redhat/grub.conf")
     grubenv = simple_command("/usr/bin/grub2-editenv list", keep_rc=True)
     haproxy_cfg = first_file(
@@ -471,20 +469,18 @@ class DefaultSpecs(Specs):
     lpstat_p = simple_command("/usr/bin/lpstat -p")
     lpstat_protocol_printers = lpstat.lpstat_protocol_printers_info
     lpstat_queued_jobs_count = lpstat.lpstat_queued_jobs_count
-    ls_la = command_with_args('/bin/ls -la %s', ls.list_with_la, keep_rc=True)
+    lru_gen_enabled = simple_file("/sys/kernel/mm/lru_gen/enabled")
+    ls_files = command_with_args(
+        '/bin/ls -lH %s', ls.list_files_with_lH, save_as='ls_files', keep_rc=True
+    )
+    ls_la = command_with_args('/bin/ls -la %s', ls.list_with_la, save_as='ls_la', keep_rc=True)
     ls_la_filtered = command_with_args(
-        '/bin/ls -la %s', ls.list_with_la_filtered, keep_rc=True
+        '/bin/ls -la %s', ls.list_with_la_filtered, save_as='ls_la_filtered', keep_rc=True
     )  # Result is filtered
-    ls_lan = command_with_args('/bin/ls -lan %s', ls.list_with_lan, keep_rc=True)
+    ls_lan = command_with_args('/bin/ls -lan %s', ls.list_with_lan, save_as='ls_lan', keep_rc=True)
     ls_lan_filtered = command_with_args(
-        '/bin/ls -lan %s', ls.list_with_lan_filtered, keep_rc=True
+        '/bin/ls -lan %s', ls.list_with_lan_filtered, save_as='ls_lan_filtered', keep_rc=True
     )  # Result is filtered
-    ls_lanL = command_with_args('/bin/ls -lanL %s', ls.list_with_lanL, keep_rc=True)
-    ls_lanR = command_with_args('/bin/ls -lanR %s', ls.list_with_lanR, keep_rc=True)
-    ls_lanRL = command_with_args('/bin/ls -lanRL %s', ls.list_with_lanRL, keep_rc=True)
-    ls_laRZ = command_with_args('/bin/ls -laRZ %s', ls.list_with_laRZ, keep_rc=True)
-    ls_laZ = command_with_args('/bin/ls -laZ %s', ls.list_with_laZ, keep_rc=True)
-    ls_dev = simple_command("/bin/ls -lanR /dev")  # T.B.D
     lsattr = command_with_args("/bin/lsattr %s", lsattr.paths_to_lsattr)
     lsblk = simple_command("/bin/lsblk")
     lsblk_pairs = simple_command(
@@ -841,27 +837,28 @@ class DefaultSpecs(Specs):
     ssh_config_d = glob_file(r"/etc/ssh/ssh_config.d/*.conf")
     sshd_config = simple_file("/etc/ssh/sshd_config")
     sshd_config_d = glob_file(r"/etc/ssh/sshd_config.d/*.conf")
-    sshd_config_perms = simple_command("/bin/ls -lH /etc/ssh/sshd_config")
     sshd_test_mode = simple_command("/usr/sbin/sshd -T")
     sssd_config = simple_file("/etc/sssd/sssd.conf")
     sssd_conf_d = glob_file("/etc/sssd/conf.d/*.conf")
     subscription_manager_facts = simple_command(
-        "/usr/sbin/subscription-manager facts", override_env={"LC_ALL": "C.UTF-8"}
+        "/usr/sbin/subscription-manager facts",
+        override_env={"LC_ALL": "C.UTF-8", "LANG": "C.UTF-8"},
     )
     subscription_manager_id = simple_command(
         "/usr/sbin/subscription-manager identity",  # use "/usr/sbin" here, BZ#1690529
-        override_env={"LC_ALL": "C.UTF-8"},
+        override_env={"LC_ALL": "C.UTF-8", "LANG": "C.UTF-8"},
     )
     subscription_manager_installed_product_ids = simple_command(
         r"/usr/bin/find /etc/pki/product-default/ /etc/pki/product/ -name '*pem' -exec rct cat-cert --no-content '{}' \;"
     )
     subscription_manager_status = simple_command(
-        "/usr/sbin/subscription-manager status", override_env={"LC_ALL": "C.UTF-8"}
+        "/usr/sbin/subscription-manager status",
+        override_env={"LC_ALL": "C.UTF-8", "LANG": "C.UTF-8"},
     )
     subscription_manager_syspurpose = simple_command(
         "/usr/sbin/subscription-manager syspurpose --show",
         deps=[IsGtOrRhel84],
-        override_env={"LC_ALL": "C.UTF-8"},
+        override_env={"LC_ALL": "C.UTF-8", "LANG": "C.UTF-8"},
     )
     sudoers = glob_file(["/etc/sudoers", "/etc/sudoers.d/*"])
     swift_proxy_server_conf = first_file(
@@ -903,7 +900,7 @@ class DefaultSpecs(Specs):
     systemctl_show_target = simple_command("/bin/systemctl show *.target")
     systemctl_status_all = simple_command("/bin/systemctl status --all")  # used by puptoo
     systemd_analyze_blame = simple_command("/bin/systemd-analyze blame")
-    systemd_docker = simple_command("/usr/bin/systemctl cat docker.service")
+    systemd_docker = simple_command("/usr/bin/systemctl cat docker.service")  # v3.7.0
     systemd_logind_conf = simple_file("/etc/systemd/logind.conf")
     systemd_openshift_node = simple_command("/usr/bin/systemctl cat atomic-openshift-node.service")
     systemd_system_conf = simple_file("/etc/systemd/system.conf")
@@ -962,6 +959,7 @@ class DefaultSpecs(Specs):
     vma_ra_enabled = simple_file("/sys/kernel/mm/swap/vma_ra_enabled")
     vsftpd = simple_file("/etc/pam.d/vsftpd")
     vsftpd_conf = simple_file("/etc/vsftpd/vsftpd.conf")
+    watchdog_conf = simple_file("/etc/watchdog.conf")
     watchdog_logs = glob_file("/var/log/watchdog/*.std*")
     wc_proc_1_mountinfo = simple_command("/usr/bin/wc -l /proc/1/mountinfo")
     x86_ibpb_enabled = simple_file("sys/kernel/debug/x86/ibpb_enabled")

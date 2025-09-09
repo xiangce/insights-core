@@ -1,12 +1,17 @@
 from __future__ import absolute_import
-import os
-import logging
+
 import argparse
 import copy
+import logging
+import os
 import six
-import sys
+
 from six.moves import configparser as ConfigParser
+
+from insights.cleaner import DEFAULT_OBFUSCATIONS
+from insights.client.utilities import get_rhel_version, get_egg_version_tuple
 from insights.specs.manifests import manifests, content_types
+from insights.util import parse_bool
 
 try:
     from .constants import InsightsConstants as constants
@@ -14,6 +19,10 @@ except:
     from constants import InsightsConstants as constants
 
 logger = logging.getLogger(__name__)
+if six.PY2:
+    # to avoid "No handler" issue of python 2.7
+    # https://docs.python.org/2.7/howto/logging.html#configuring-logging-for-a-library
+    logger.addHandler(logging.NullHandler())
 
 
 DEFAULT_OPTS = {
@@ -276,20 +285,16 @@ DEFAULT_OPTS = {
         'action': 'store',
     },
     'obfuscate': {
-        # non-CLI
-        'default': False
-    },
-    'obfuscate_ipv6': {
-        # non-CLI
-        'default': False
+        # non-CLI, deprecated
+        'default': None  # None is good for distinguishing explicit setting
     },
     'obfuscate_hostname': {
-        # non-CLI
-        'default': False
+        # non-CLI, deprecated
+        'default': None  # None is good for distinguishing explicit setting
     },
-    'obfuscate_mac': {
+    'obfuscation_list': {
         # non-CLI
-        'default': False
+        'default': None  # None is good for distinguishing explicit setting
     },
     'offline': {
         'default': False,
@@ -529,13 +534,13 @@ class InsightsConfig(object):
         unknown_opts = set(dict_.keys()).difference(set(DEFAULT_OPTS.keys()))
         if unknown_opts and self._print_errors:
             # only print error once
-            sys.stdout.write('WARNING: Unknown options: ' + ', '.join(list(unknown_opts)) + '\n')
+            logger.warning('WARNING: Unknown options: ' + ', '.join(list(unknown_opts)))
             if 'no_schedule' in unknown_opts:
-                sys.stdout.write(
+                logger.warning(
                     'WARNING: Config option `no_schedule` has '
                     'been deprecated. To disable automatic '
                     'scheduling for Red Hat Insights, run '
-                    '`insights-client --disable-schedule`\n'
+                    '`insights-client --disable-schedule`'
                 )
         for u in unknown_opts:
             dict_.pop(u, None)
@@ -563,8 +568,8 @@ class InsightsConfig(object):
             and not os.environ.get('HTTPS_PROXY')
             and self._print_errors
         ):
-            sys.stdout.write(
-                'WARNING: HTTP_PROXY is unused by insights-client. Please use HTTPS_PROXY.\n'
+            logger.warning(
+                'WARNING: HTTP_PROXY is unused by insights-client. Please use HTTPS_PROXY.'
             )
 
         # ignore these env as they are not config vars
@@ -634,7 +639,7 @@ class InsightsConfig(object):
             parsedconfig.read(fname or self.conf)
         except ConfigParser.Error:
             if self._print_errors:
-                sys.stdout.write('ERROR: Could not read configuration file, ' 'using defaults\n')
+                logger.error('ERROR: Could not read configuration file, ' 'using defaults')
             return
         try:
             if parsedconfig.has_section(constants.app_name):
@@ -645,7 +650,7 @@ class InsightsConfig(object):
                 raise ConfigParser.Error
         except ConfigParser.Error:
             if self._print_errors:
-                sys.stdout.write('ERROR: Could not read configuration file, ' 'using defaults\n')
+                logger.error('ERROR: Could not read configuration file, ' 'using defaults')
             return
         for key in d:
             try:
@@ -657,9 +662,9 @@ class InsightsConfig(object):
                     d[key] = parsedconfig.getboolean(constants.app_name, key)
             except ValueError as e:
                 if self._print_errors:
-                    sys.stdout.write(
+                    logger.error(
                         'ERROR: {0}.\nCould not read configuration file, '
-                        'using defaults\n'.format(e)
+                        'using defaults'.format(e)
                     )
                 return
         self._update_dict(d)
@@ -681,6 +686,54 @@ class InsightsConfig(object):
         '''
         Make sure there are no conflicting or invalid options
         '''
+
+        def _validate_obfuscation_options():
+            # Old switches are "str" by default now, convert them to boolean
+            self.obfuscate = parse_bool(self.obfuscate, None)
+            self.obfuscate_hostname = parse_bool(self.obfuscate_hostname, None)
+            # When old switches are set explicitly, even set as False
+            if self.obfuscate is not None or self.obfuscate_hostname is not None:
+                # Warning deprecation only on RHEL 8+ and from egg v 3.6.10 (planned)
+                if self._print_errors and get_rhel_version() > 7:
+                    if get_egg_version_tuple() >= (3, 6, 10):
+                        logger.warning(
+                            'WARNING: `obfuscate` and `obfuscate_hostname` are deprecated, please use `obfuscation_list` instead.'
+                        )
+                if self.obfuscation_list is not None:
+                    # When BOTH new and old switches are set explicitly
+                    if self._print_errors:
+                        logger.warning(
+                            'WARNING: Conflicting options: `obfuscation_list` and `obfuscate`, using: "obfuscation_list={0}".'.format(
+                                self.obfuscation_list
+                            )
+                        )
+                else:
+                    # Only old switches are set
+                    if self.obfuscate_hostname and not self.obfuscate:
+                        raise ValueError('Option `obfuscate_hostname` requires `obfuscate`')
+                    # Turn old options to new switch obfuscation_list
+                    self.obfuscation_list = list()
+                    self.obfuscation_list.append('ipv4') if self.obfuscate else None
+                    self.obfuscation_list.append('hostname') if self.obfuscate_hostname else None
+                # discard old options
+                self.obfuscate = self.obfuscate_hostname = None
+            # Re-format the new obfuscation_list
+            if isinstance(self.obfuscation_list, six.string_types):
+                obf_opt = set(
+                    opt.strip() for opt in self.obfuscation_list.strip('\'"').split(',') if opt
+                )
+                self.obfuscation_list = sorted(obf_opt & DEFAULT_OBFUSCATIONS)
+                invalid_opt = obf_opt - DEFAULT_OBFUSCATIONS
+                if invalid_opt and self._print_errors:
+                    logger.warning(
+                        'WARNING: ignoring invalid obfuscate options: `{0}`, using: "obfuscation_list={1}".'.format(
+                            '`, `'.join(invalid_opt), ','.join(self.obfuscation_list)
+                        )
+                    )
+
+        # validate obfuscation options
+        _validate_obfuscation_options()
+
         if self.analyze_image_id:
             raise ValueError('--analyze-image-id is no longer supported.')
         if self.analyze_file:
@@ -693,8 +746,6 @@ class InsightsConfig(object):
             raise ValueError('--use-atomic is no longer supported.')
         if self.use_docker:
             raise ValueError('--use-docker is no longer supported.')
-        if self.obfuscate_hostname and not self.obfuscate:
-            raise ValueError('Option `obfuscate_hostname` requires `obfuscate`')
         if self.enable_schedule and self.disable_schedule:
             raise ValueError('Conflicting options: --enable-schedule and --disable-schedule')
         if self.payload and not self.content_type:
@@ -740,15 +791,15 @@ class InsightsConfig(object):
                 raise ValueError(
                     'Cannot write to %s. %s is not a directory.' % (self.output_dir, parent_dir)
                 )
-            if self.obfuscate:
+            if self.obfuscation_list:
                 if self._print_errors:
-                    sys.stdout.write(
-                        'WARNING: Obfuscation reports will be created alongside the output directory.\n'
+                    logger.warning(
+                        'WARNING: Obfuscation reports will be created alongside the output directory.'
                     )
         if self.core_collect is False:
             if self._print_errors:
-                sys.stdout.write(
-                    'WARNING: "core_collect=False" is no longer supported. "core_collect=True" will be used.\n'
+                logger.warning(
+                    'WARNING: "core_collect=False" is no longer supported. "core_collect=True" will be used.'
                 )
         if self.output_file:
             if os.path.exists(self.output_file):
@@ -763,10 +814,10 @@ class InsightsConfig(object):
                 raise ValueError(
                     'Cannot write to %s. %s is not a directory.' % (self.output_file, parent_dir)
                 )
-            if self.obfuscate:
+            if self.obfuscation_list:
                 if self._print_errors:
-                    sys.stdout.write(
-                        'WARNING: Obfuscation reports will be created alongside the output archive.\n'
+                    logger.warning(
+                        'WARNING: Obfuscation reports will be created alongside the output archive.'
                     )
         if self.module and not self.module.startswith('insights.client.apps.'):
             raise ValueError('You can only run modules within the namespace insights.client.apps.*')
@@ -809,10 +860,8 @@ class InsightsConfig(object):
         if self.compressor not in constants.valid_compressors:
             # set default compressor if an invalid one is supplied
             if self._print_errors:
-                sys.stdout.write(
-                    'The compressor {0} is not supported. Using default: gz\n'.format(
-                        self.compressor
-                    )
+                logger.warning(
+                    'The compressor {0} is not supported. Using default: gz'.format(self.compressor)
                 )
             self.compressor = 'gz'
         if self.app:
@@ -904,9 +953,9 @@ class InsightsConfig(object):
             if self.output_file.endswith(_tar_ext(x)):
                 if self.compressor != x:
                     if self._print_errors:
-                        sys.stdout.write(
+                        logger.warning(
                             'The given output file {0} does not match the given compressor {1}. '
-                            'Setting compressor to match the file extension.\n'.format(
+                            'Setting compressor to match the file extension.'.format(
                                 self.output_file, self.compressor
                             )
                         )

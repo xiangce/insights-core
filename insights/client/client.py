@@ -8,7 +8,8 @@ import logging.handlers
 import os
 import time
 import six
-from distutils.version import LooseVersion
+
+from insights.util.rpm_vercmp import version_compare
 
 from .utilities import (
     generate_machine_id,
@@ -94,7 +95,7 @@ def get_file_handler(config):
     # or if there is a problem retrieving the rpm version.
     rpm_version = get_version_info()['client_version']
     if not rpm_version or (
-        LooseVersion(rpm_version) < LooseVersion(constants.rpm_version_before_logrotate)
+        version_compare(rpm_version, constants.rpm_version_before_logrotate) < 0
     ):
         file_handler = RotatingFileHandlerWithUMask(0o077, log_file, backupCount=3)
     else:
@@ -389,11 +390,6 @@ def _legacy_upload(config, pconn, tar_file, content_type, collection_duration=No
                 )
             else:
                 logger.info("Successfully uploaded report for %s.", msg_name)
-            if config.register:
-                # direct to console after register + upload
-                logger.info(
-                    'View the Red Hat Insights console at https://console.redhat.com/insights/'
-                )
             break
 
         elif upload.status_code in (412, 413):
@@ -426,10 +422,6 @@ def upload(config, pconn, tar_file, content_type, collection_duration=None):
             os.chmod(constants.lastupload_file, 0o644)
             msg_name = determine_hostname(config.display_name)
             logger.info("Successfully uploaded report for %s.", msg_name)
-            if config.register:
-                # direct to console after register + upload
-                display_console_url(config)
-            return
         elif upload.status_code in (413, 415):
             pconn.handle_fail_rcs(upload)
             raise RuntimeError('Upload failed.')
@@ -451,10 +443,3 @@ def display_upload_error_and_retry(config, tries, error_message):
         logger.error("All attempts to upload have failed!")
         print("Please see %s for additional information" % config.logging_file)
         raise RuntimeError('Upload failed.')
-
-
-def display_console_url(config):
-    console_url = "https://console.redhat.com/insights/"
-    if "stage" in config.base_url:
-        console_url = "https://console.stage.redhat.com/insights/"
-    logger.info("View the Red Hat Insights console at %s" % console_url)
