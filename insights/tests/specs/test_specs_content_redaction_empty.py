@@ -85,8 +85,7 @@ def teardown_function(func):
     dr.ENABLED = defaultdict(lambda: True)
 
 
-@patch('insights.cleaner.Cleaner.generate_report')
-def test_specs_ds_with_hn_collect(mock_fun):
+def test_specs_ds_with_hn_collect():
     # Preparation
     manifest = collect.load_manifest(specs_manifest)
     for pkg in manifest.get("plugins", {}).get("packages", []):

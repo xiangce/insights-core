@@ -19,7 +19,6 @@ import yaml
 from datetime import datetime
 
 from insights import apply_configs, apply_default_enabled, get_pool
-from insights.cleaner import Cleaner
 from insights.core import blacklist, dr, filters
 from insights.core.serde import Hydration
 from insights.core.spec_factory import SAFE_ENV
@@ -245,9 +244,7 @@ def collect(
 
     broker = dr.Broker()
     ctx = create_context(client.get("context", {}))
-    cleaner = Cleaner(client_config, black_list) if client_config else None
     broker[ctx.__class__] = ctx
-    broker['cleaner'] = cleaner
     broker['redact_config'] = black_list
     broker['client_config'] = client_config
 
@@ -267,8 +264,6 @@ def collect(
         dr.run_all(broker=broker, pool=pool)
 
     collect_errors = _parse_broker_exceptions(broker, EXCEPTIONS_TO_REPORT)
-
-    cleaner.generate_report(archive_name) if cleaner else None
 
     if compress:
         return create_archive(output_path), collect_errors

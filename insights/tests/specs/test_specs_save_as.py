@@ -13,7 +13,6 @@ from insights.core import filters
 from insights.core.context import HostContext
 from insights.core.filters import add_filter
 from insights.core.plugins import datasource
-from insights.cleaner import Cleaner
 from insights.core.spec_factory import (
     RawFileProvider,
     RegistryPoint,
@@ -178,7 +177,6 @@ def test_specs_save_as_no_collect():
     add_filter(Stuff.first_file_spec_w_filter, [" hello ", "class T"])
     broker = dr.Broker()
     broker[HostContext] = HostContext()
-    broker['cleaner'] = Cleaner(None, None)
     broker = dr.run(dr.get_dependency_graph(dostuff), broker)
     # general tests
     assert dostuff in broker, broker.tracebacks
@@ -205,9 +203,7 @@ def test_specs_save_as_no_collect():
     )
 
 
-@mark.parametrize("obfuscate", [True, False])
-@patch('insights.cleaner.Cleaner.generate_report', Mock())
-def test_specs_save_as_collect(obfuscate):
+def test_specs_save_as_collect():
     add_filter(Stuff.smpl_cmd_w_filter, " hello ")
     add_filter(Stuff.smpl_file_w_filter, "def test")
     add_filter(Stuff.first_file_spec_w_filter, [" hello ", "class T"])
@@ -216,9 +212,7 @@ def test_specs_save_as_collect(obfuscate):
     for pkg in manifest.get("plugins", {}).get("packages", []):
         dr.load_components(pkg, exclude=None)
 
-    conf = InsightsConfig(
-        obfuscate=obfuscate, obfuscate_hostname=obfuscate, manifest=specs_save_as_manifest
-    )
+    conf = InsightsConfig(manifest=specs_save_as_manifest)
     arch = InsightsArchive(conf)
     arch.create_archive_dir()
     output_path, errors = collect.collect(

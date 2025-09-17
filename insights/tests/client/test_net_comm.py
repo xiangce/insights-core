@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from insights.client.phase import v1
+from insights.client.phase import v2
 from insights.tests.helpers import dummy_requests_session, getenv_bool, Timeout
 from mock.mock import patch
 from pytest import mark
@@ -22,12 +22,13 @@ def test_failure_does_not_take_too_long():
     Client execution does not take too long if connection is blocked by a firewall. First thing that fails is the new
     egg fetch in the update phase. Every net request up to this point must timeout in reasonable time.
     """
+
     def worker():
         """
         Runs first two phases. Expected to be run in a subprocess. The update phase is expected to fail.
         """
         try:
-            v1.pre_update()
+            v2.pre_update()
         except SystemExit as exception:
             if exception.code:
                 exit(1)  # This phase must not fail.
@@ -35,7 +36,7 @@ def test_failure_does_not_take_too_long():
             exit(1)  # Phase did not exit.
 
         try:
-            v1.update()
+            v2.update()
         except SystemExit as exception:
             if exception.code != 1:
                 exit(1)  # Egg update is expected to fail.

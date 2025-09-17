@@ -8,7 +8,6 @@ import six
 
 from six.moves import configparser as ConfigParser
 
-from insights.cleaner import DEFAULT_OBFUSCATIONS
 from insights.client.utilities import get_rhel_version, get_egg_version_tuple
 from insights.specs.manifests import manifests, content_types
 from insights.util import parse_bool
@@ -24,6 +23,8 @@ if six.PY2:
     # https://docs.python.org/2.7/howto/logging.html#configuring-logging-for-a-library
     logger.addHandler(logging.NullHandler())
 
+
+DEFAULT_OBFUSCATIONS = {'hostname', 'ipv4', 'ipv6', 'mac'}
 
 DEFAULT_OPTS = {
     'analyze_container': {
@@ -731,7 +732,6 @@ class InsightsConfig(object):
                         )
                     )
 
-        # validate obfuscation options
         _validate_obfuscation_options()
 
         if self.analyze_image_id:

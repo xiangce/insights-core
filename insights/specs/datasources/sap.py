@@ -95,7 +95,6 @@ def ld_library_path_of_user(broker):
     if llds:
         return DatasourceProvider(
             '\n'.join(llds),
-            cleaner=broker.get('cleaner'),
             relative_path='insights_datasources/ld_library_path_of_user',
         )
     raise SkipComponent('')

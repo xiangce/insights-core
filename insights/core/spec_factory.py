@@ -12,9 +12,8 @@ from collections import defaultdict
 from glob import glob
 from subprocess import call
 
-from insights.cleaner import DEFAULT_OBFUSCATIONS
-from insights.cleaner.filters import AllowFilter
 from insights.core import blacklist, dr, filters
+from insights.core.filters import AllowFilter
 from insights.core.context import ExecutionContext, FSRoots, HostContext
 from insights.core.exceptions import (
     BlacklistedSpec,
@@ -80,42 +79,6 @@ class ContentProvider(object):
     def _stream(self):
         raise NotImplementedError()
 
-    def _clean_content(self):
-        """
-        Clean (Redact, Filter, and Obfuscate) the Spec Content ONLY when
-        collecting data.
-        """
-        content = self.content  # load first for debugging info order
-        if content and isinstance(self.ctx, HostContext) and self.ds and self.cleaner:
-            cleans = []
-            # Redacting?
-            no_red = getattr(self.ds, 'no_redact', False)
-            cleans.append("Redact") if not no_red else None
-            # Obfuscating?
-            no_obf = getattr(self.ds, 'no_obfuscate', [])
-            cleans.append("Obfuscate") if set(no_obf) != DEFAULT_OBFUSCATIONS else None
-            # Filtering?
-            allowlist = None
-            if self._filterable:
-                cleans.append("Filter")
-                allowlist = self._filters
-            # Cleaning - Entry
-            if cleans:
-                log.debug("Cleaning (%s) %s", "/".join(cleans), self.relative_path)
-                content = self.cleaner.clean_content(
-                    content,
-                    no_obfuscate=no_obf,
-                    allowlist=allowlist,
-                    no_redact=no_red,
-                    width=self.relative_path.endswith("netstat_-neopa"),
-                )
-                if len(content) == 0:
-                    log.debug("Skipping %s due to empty after cleaning", self.path)
-                    raise ContentException("Empty after cleaning: %s" % self.path)
-            else:
-                log.debug("Skipping cleaning %s", self.relative_path)
-        return content
-
     @property
     def path(self):
         return os.path.join(self.root, self.relative_path)
@@ -142,8 +105,7 @@ class ContentProvider(object):
 
     def write(self, dst):
         fs.ensure_path(os.path.dirname(dst))
-        # Clean Spec Content when writing it down to disk before uploading
-        content = "\n".join(self._clean_content())
+        content = "\n".join(content)
         content = content.encode("utf-8") if six.PY3 else content
         with open(dst, "wb") as f:
             f.write(content)
@@ -170,7 +132,6 @@ class DatasourceProvider(ContentProvider):
         save_as=None,
         ds=None,
         ctx=None,
-        cleaner=None,
         no_obfuscate=None,
         no_redact=False,
     ):
@@ -181,7 +142,6 @@ class DatasourceProvider(ContentProvider):
         self.root = root
         self.ds = ds or self
         self.ctx = ctx
-        self.cleaner = cleaner
         self.no_obfuscate = no_obfuscate or []
         self.no_redact = no_redact
 
@@ -197,12 +157,11 @@ class DatasourceProvider(ContentProvider):
 
 
 class FileProvider(ContentProvider):
-    def __init__(self, relative_path, root="/", save_as=None, ds=None, ctx=None, cleaner=None):
+    def __init__(self, relative_path, root="/", save_as=None, ds=None, ctx=None):
         super(FileProvider, self).__init__()
         self.ds = ds
         self.ctx = ctx
         self.root = root
-        self.cleaner = cleaner
         self.relative_path = relative_path.lstrip("/")
         self.save_as = save_as
         self.file_name = os.path.basename(self.path)
@@ -354,7 +313,6 @@ class CommandOutputProvider(ContentProvider):
         inherit_env=None,
         override_env=None,
         signum=None,
-        cleaner=None,
     ):
         super(CommandOutputProvider, self).__init__()
         self.cmd = cmd if six.PY3 else str(cmd)
@@ -370,7 +328,6 @@ class CommandOutputProvider(ContentProvider):
         self.override_env = override_env if override_env is not None else dict()
         self.signum = signum or signal.SIGKILL
         self.rc = None
-        self.cleaner = cleaner
 
         self._misc_settings()
         self._content = None
@@ -478,7 +435,6 @@ class ContainerProvider(CommandOutputProvider):
         inherit_env=None,
         override_env=None,
         signum=None,
-        cleaner=None,
     ):
         # cmd  = "<podman|docker> exec container_id command"
         # path = "<podman|docker> exec container_id cat path"
@@ -496,7 +452,6 @@ class ContainerProvider(CommandOutputProvider):
             inherit_env,
             override_env,
             signum,
-            cleaner,
         )
 
 
@@ -732,14 +687,12 @@ class simple_file(object):
 
     def __call__(self, broker):
         ctx = _get_context(self.context, broker)
-        cleaner = broker.get('cleaner')
         return self.kind(
             ctx.locate_path(self.path),
             root=ctx.root,
             save_as=self.save_as,
             ds=self,
             ctx=ctx,
-            cleaner=cleaner,
         )
 
 
@@ -789,7 +742,6 @@ class glob_file(object):
         datasource(self.context, *deps, multi_output=True, raw=self.raw, **kwargs)(self)
 
     def __call__(self, broker):
-        cleaner = broker.get('cleaner')
         ctx = _get_context(self.context, broker)
         root = ctx.root
         results = []
@@ -806,7 +758,6 @@ class glob_file(object):
                             save_as=self.save_as,
                             ds=self,
                             ctx=ctx,
-                            cleaner=cleaner,
                         )
                     )
                 except NoFilterException as nfe:
@@ -877,7 +828,6 @@ class first_file(object):
         datasource(self.context, *deps, raw=self.raw, **kwargs)(self)
 
     def __call__(self, broker):
-        cleaner = broker.get('cleaner')
         ctx = _get_context(self.context, broker)
         root = ctx.root
         for p in self.paths:
@@ -888,7 +838,6 @@ class first_file(object):
                     save_as=self.save_as,
                     ds=self,
                     ctx=ctx,
-                    cleaner=cleaner,
                 )
             except NoFilterException as nfe:
                 raise nfe
@@ -1023,7 +972,6 @@ class simple_command(object):
         datasource(self.context, *deps, raw=self.raw, **kwargs)(self)
 
     def __call__(self, broker):
-        cleaner = broker.get('cleaner')
         ctx = broker[self.context]
         return CommandOutputProvider(
             self.cmd,
@@ -1036,7 +984,6 @@ class simple_command(object):
             inherit_env=self.inherit_env,
             override_env=self.override_env,
             signum=self.signum,
-            cleaner=cleaner,
         )
 
 
@@ -1104,7 +1051,6 @@ class command_with_args(object):
         datasource(self.provider, self.context, *deps, raw=self.raw, **kwargs)(self)
 
     def __call__(self, broker):
-        cleaner = broker.get('cleaner')
         source = broker[self.provider]
         ctx = broker[self.context]
         if isinstance(source, ContentProvider):
@@ -1127,7 +1073,6 @@ class command_with_args(object):
                 inherit_env=self.inherit_env,
                 override_env=self.override_env,
                 signum=self.signum,
-                cleaner=cleaner,
             )
         except NoFilterException as nfe:
             raise nfe
@@ -1205,7 +1150,6 @@ class foreach_execute(object):
     def __call__(self, broker):
         result = []
         source = broker[self.provider]
-        cleaner = broker.get('cleaner')
         ctx = broker[self.context]
         if isinstance(source, ContentProvider):
             source = source.content
@@ -1225,7 +1169,6 @@ class foreach_execute(object):
                     inherit_env=self.inherit_env,
                     override_env=self.override_env,
                     signum=self.signum,
-                    cleaner=cleaner,
                 )
                 result.append(cop)
             except NoFilterException as nfe:
@@ -1287,7 +1230,6 @@ class foreach_collect(object):
     def __call__(self, broker):
         result = []
         source = broker[self.provider]
-        cleaner = broker.get('cleaner')
         ctx = _get_context(self.context, broker)
         root = ctx.root
         if isinstance(source, ContentProvider):
@@ -1307,7 +1249,6 @@ class foreach_collect(object):
                             save_as=self.save_as,
                             ds=self,
                             ctx=ctx,
-                            cleaner=cleaner,
                         )
                     )
                 except NoFilterException as nfe:
@@ -1358,7 +1299,6 @@ class container_execute(foreach_execute):
     def __call__(self, broker):
         result = []
         source = broker[self.provider]
-        cleaner = broker.get('cleaner')
         ctx = broker[self.context]
         if isinstance(source, ContentProvider):
             source = source.content
@@ -1392,7 +1332,6 @@ class container_execute(foreach_execute):
                     inherit_env=self.inherit_env,
                     override_env=self.override_env,
                     signum=self.signum,
-                    cleaner=cleaner,
                 )
                 result.append(ccp)
             except NoFilterException as nfe:
@@ -1459,7 +1398,6 @@ class container_collect(foreach_execute):
     def __call__(self, broker):
         result = []
         source = broker[self.provider]
-        cleaner = broker.get('cleaner')
         ctx = broker[self.context]
         if isinstance(source, ContentProvider):
             source = source.content
@@ -1490,7 +1428,6 @@ class container_collect(foreach_execute):
                     inherit_env=self.inherit_env,
                     override_env=self.override_env,
                     signum=self.signum,
-                    cleaner=cleaner,
                 )
                 result.append(cfp)
             except NoFilterException as nfe:
@@ -1558,7 +1495,7 @@ class find(object):
         self.__module__ = self.__class__.__module__
 
         if getattr(spec, "filterable", False):
-            filters._add_filter(spec, pattern)
+            filters.add_filter(spec, pattern)
 
         component(spec)(self)
 

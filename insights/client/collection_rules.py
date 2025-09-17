@@ -127,81 +127,6 @@ class InsightsUploadConf(object):
         #   since new format is favored.
         self.using_new_format = True
 
-    def get_rm_conf_old(self):
-        """
-        Get excluded files config from remove_file.
-        """
-        # Convert config object into dict
-        self.using_new_format = False
-        parsedconfig = ConfigParser.RawConfigParser()
-        if not self.remove_file:
-            # no filename defined, return nothing
-            logger.debug('remove_file is undefined')
-            return None
-        if not os.path.isfile(self.remove_file):
-            logger.debug(
-                '%s not found. No data files, commands,'
-                ' or patterns will be ignored, and no keyword obfuscation will occur.',
-                self.remove_file,
-            )
-            return None
-        try:
-            verify_permissions(self.remove_file)
-        except RuntimeError as e:
-            if self.config.validate:
-                # exit if permissions invalid and using --validate
-                raise RuntimeError('ERROR: %s' % e)
-            logger.warning('WARNING: %s', e)
-        try:
-            parsedconfig.read(self.remove_file)
-            sections = parsedconfig.sections()
-
-            if not sections:
-                # file has no sections, skip it
-                logger.debug('Remove.conf exists but no parameters have been defined.')
-                return None
-
-            if sections != ['remove']:
-                raise RuntimeError(
-                    'ERROR: invalid section(s) in remove.conf. Only "remove" is valid.'
-                )
-
-            expected_keys = ('commands', 'files', 'patterns', 'keywords')
-            rm_conf = {'new_format': False}
-            for item, value in parsedconfig.items('remove'):
-                if item not in expected_keys:
-                    raise RuntimeError(
-                        'ERROR: Unknown key in remove.conf: '
-                        + item
-                        + '\nValid keys are '
-                        + ', '.join(expected_keys)
-                        + '.'
-                    )
-                if six.PY3:
-                    rm_conf[item] = [
-                        v.strip()
-                        for v in value.strip().encode('utf-8').decode('unicode-escape').split(',')
-                    ]
-                else:
-                    rm_conf[item] = [
-                        v.strip() for v in value.strip().decode('string-escape').split(',')
-                    ]
-            self.rm_conf = rm_conf
-        except ConfigParser.Error as e:
-            # can't parse config file at all
-            logger.debug(e)
-            logger.debug(
-                'To configure using YAML, please use file-redaction.yaml and file-content-redaction.yaml.'
-            )
-            raise RuntimeError(
-                'ERROR: Cannot parse the remove.conf file.\n'
-                'See %s for more information.' % self.config.logging_file
-            )
-        logger.warning(
-            'WARNING: remove.conf is deprecated. Please use file-redaction.yaml and file-content-redaction.yaml. See https://access.redhat.com/articles/4511681 for details.'
-        )
-        return self.rm_conf
-
     def load_redaction_file(self, fname):
         '''
         Load the YAML-style file-redaction.yaml
@@ -248,22 +173,15 @@ class InsightsUploadConf(object):
         Try to load the file-redaction.yaml and file-content-redaction.yaml
         '''
 
-        rm_conf = {}
         redact_conf = self.load_redaction_file(self.redaction_file)
         content_redact_conf = self.load_redaction_file(self.content_redaction_file)
 
-        if not redact_conf and not content_redact_conf:
-            # no file-redaction.yaml or file-content-redaction.yaml defined,
-            #   try to use remove.conf
-            self.rm_conf = self.get_rm_conf_old()
-        else:
-            rm_conf.update(new_format=True)
-            rm_conf.update(redact_conf or {})
-            rm_conf.update(content_redact_conf or {})
-            # remove Nones, empty strings, and empty lists
-            self.rm_conf = dict((k, v) for k, v in rm_conf.items() if v)
+        rm_conf = dict(new_format=True)
+        rm_conf.update(redact_conf or {})
+        rm_conf.update(content_redact_conf or {})
+        # remove Nones, empty strings, and empty lists
 
-        if self.rm_conf:
+        if rm_conf:
             # WARNING for missing HBI required specs
             required = {
                 'machine_id': ('files', '/etc/insights-client/machine-id'),
@@ -273,18 +191,18 @@ class InsightsUploadConf(object):
             for spec, (kind, cp) in required.items():
                 if (
                     # symbolic name / spec name
-                    any(spec in self.rm_conf.get(_k, []) for _k in ['files', 'commands'])
+                    any(spec in rm_conf.get(_k, []) for _k in ['files', 'commands'])
                     # file path / command line
-                    or cp in self.rm_conf.get(kind, [])
+                    or cp in rm_conf.get(kind, [])
                     # insights component module
-                    or _prefix + spec in self.rm_conf.get('components', [])
+                    or _prefix + spec in rm_conf.get('components', [])
                 ):
                     logger.warning(
                         "WARNING: Spec %s will be skipped for redaction; as it would cause issues, please remove it from %s.",
                         spec,
                         self.redaction_file,
                     )
-        # return the RAW rm_conf
+        self.rm_conf = dict((k, v) for k, v in rm_conf.items() if v)
         return self.rm_conf
 
     def get_tags_conf(self):

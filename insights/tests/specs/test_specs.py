@@ -8,7 +8,6 @@ from collections import defaultdict
 from mock.mock import patch
 
 from insights import collect
-from insights.cleaner import Cleaner
 from insights.client.archive import InsightsArchive
 from insights.client.config import InsightsConfig
 from insights.core import Parser, dr
@@ -268,7 +267,6 @@ def test_specs_spec_factory():
     add_filter(Stuff.cmd_w_args_filter, [" ", ":"])
     broker = dr.Broker()
     broker[HostContext] = HostContext()
-    broker['cleaner'] = Cleaner(None, None)
     broker = dr.run(dr.get_dependency_graph(dostuff), broker)
 
     assert dostuff in broker, broker.tracebacks
@@ -301,7 +299,6 @@ def test_line_terminators():
     add_filter(Stuff.cmd_w_args_filter, [" ", ":"])
     broker = dr.Broker()
     broker[HostContext] = HostContext()
-    broker['cleaner'] = Cleaner(None, None)
     broker = dr.run(dr.get_dependency_graph(dostuff), broker)
 
     content = broker[Stuff.smpl_file_w_filter].content
@@ -319,7 +316,6 @@ def test_glob_max(max_globs):
     too_many = glob_file(max_globs + "/tmp_*_glob")
     broker = dr.Broker()
     broker[HostContext] = HostContext()
-    broker['cleaner'] = Cleaner(None, None)
     with pytest.raises(ContentException):
         too_many(broker)
 
@@ -340,7 +336,6 @@ def test_datasource_provider():
 def test_exp_no_filters():
     broker = dr.Broker()
     broker[HostContext] = HostContext()
-    broker['cleaner'] = Cleaner(None, None)
     broker = dr.run(dr.get_dependency_graph(dostuff), broker)
     assert dostuff not in broker
     exception_cnt = 0
@@ -381,9 +376,7 @@ def test_filter_starts_with_minus_sign():
     assert '    filter_message = "{}"'.format(filter_message) in broker[self_spec].content
 
 
-@pytest.mark.parametrize("obfuscate", [True, False])
-@patch('insights.cleaner.Cleaner.generate_report', return_value=None)
-def test_specs_collect(gen, obfuscate):
+def test_specs_collect(gen):
     add_filter(Stuff.many_glob_filter, " ")
     add_filter(Stuff.many_foreach_exe_filter, " ")
     add_filter(Stuff.many_foreach_clc_filter, " ")
@@ -397,8 +390,7 @@ def test_specs_collect(gen, obfuscate):
     manifest = collect.load_manifest(specs_manifest)
     for pkg in manifest.get("plugins", {}).get("packages", []):
         dr.load_components(pkg, exclude=None)
-    # For verifying convenience, test obfuscate=False only
-    conf = InsightsConfig(obfuscate=obfuscate, obfuscate_hostname=obfuscate, manifest=manifest)
+    conf = InsightsConfig(manifest=manifest)
     arch = InsightsArchive(conf)
     arch.create_archive_dir()
     output_path, errors = collect.collect(
@@ -439,10 +431,6 @@ def test_specs_collect(gen, obfuscate):
                             org_content = fp.readlines()
                         if "_filter" not in spec:
                             if org_content:
-                                if obfuscate:
-                                    assert len(org_content) == len(new_content)
-                                    continue
-                                    # Test below only for obfuscate=False
                                 assert org_content[:-1] == new_content[:-1]
                                 # Special: no '\n' in last line of collected data
                                 assert org_content[-1].strip() == new_content[-1].strip()

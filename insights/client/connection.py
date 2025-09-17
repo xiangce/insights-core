@@ -1,6 +1,7 @@
 """
 Module handling HTTP Requests and Connection Diagnostics
 """
+
 from __future__ import print_function
 from __future__ import absolute_import
 import requests
@@ -12,8 +13,10 @@ import platform
 import sys
 import warnings
 import errno
+
 # import io
 from tempfile import TemporaryFile
+
 # from datetime import datetime, timedelta
 try:
     # python 2
@@ -23,19 +26,21 @@ except ImportError:
     # python 3
     from urllib.parse import urlparse
     from urllib.parse import quote
-from .utilities import (determine_hostname,
-                        generate_machine_id,
-                        machine_id_exists,
-                        write_to_disk,
-                        write_unregistered_file,
-                        write_registered_file,
-                        os_release_info,
-                        largest_spec_in_archive,
-                        size_in_mb,
-                        _get_rhsm_identity)
+from .utilities import (
+    determine_hostname,
+    generate_machine_id,
+    machine_id_exists,
+    write_to_disk,
+    write_unregistered_file,
+    write_registered_file,
+    os_release_info,
+    largest_spec_in_archive,
+    size_in_mb,
+    _get_rhsm_identity,
+)
 from .cert_auth import rhsmCertificate
 from .constants import InsightsConstants as constants
-from insights import cleaner, package_info
+from insights import package_info
 from insights.client.collection_rules import InsightsUploadConf
 from insights.util.canonical_facts import get_canonical_facts
 
@@ -57,6 +62,7 @@ REQUEST_FAILED_EXCEPTIONS = (requests.ConnectionError, requests.Timeout)
 # TODO: Document this, or turn it into a real option
 if os.environ.get('INSIGHTS_DEBUG_HTTP'):
     import httplib
+
     httplib.HTTPConnection.debuglevel = 1
     logging.basicConfig()
     logging.getLogger().setLevel(logging.DEBUG)
@@ -66,9 +72,11 @@ if os.environ.get('INSIGHTS_DEBUG_HTTP'):
 
 
 def _host_not_found():
-    raise Exception("Error: failed to find host with matching machine-id. "
-                    "Check the registration status:\n"
-                    "# insights-client --status")
+    raise Exception(
+        "Error: failed to find host with matching machine-id. "
+        "Check the registration status:\n"
+        "# insights-client --status"
+    )
 
 
 def _api_request_failed(exception, message='The Insights API could not be reached.'):
@@ -80,6 +88,7 @@ def _api_request_failed(exception, message='The Insights API could not be reache
 def _pkg_name_version(name):
     if sys.version_info >= (3, 10):
         import importlib.metadata
+
         try:
             pkg = importlib.metadata.distribution(name)
             return pkg.name, pkg.version
@@ -87,6 +96,7 @@ def _pkg_name_version(name):
             pass
     else:
         import pkg_resources
+
         pkg = pkg_resources.working_set.find(pkg_resources.Requirement.parse(name))
         if pkg is not None:
             return pkg.project_name, pkg.version
@@ -94,7 +104,6 @@ def _pkg_name_version(name):
 
 
 class InsightsConnection(object):
-
     """
     Helper class to manage details about the connection
     """
@@ -109,8 +118,8 @@ class InsightsConnection(object):
         if self.cert_verify is None:
             # if self.config.legacy_upload:
             self.cert_verify = os.path.join(
-                constants.default_conf_dir,
-                'cert-api.access.redhat.com.pem')
+                constants.default_conf_dir, 'cert-api.access.redhat.com.pem'
+            )
             # else:
             # self.cert_verify = True
         else:
@@ -161,8 +170,7 @@ class InsightsConnection(object):
         Set up the session, auth is handled here
         """
         session = requests.Session()
-        session.headers = {'User-Agent': self.user_agent,
-                           'Accept': 'application/json'}
+        session.headers = {'User-Agent': self.user_agent, 'Accept': 'application/json'}
         if self.systemid is not None:
             session.headers.update({'systemid': self.systemid})
         if self.authmethod == "BASIC":
@@ -206,7 +214,9 @@ class InsightsConnection(object):
             log_message += " attachments={files}".format(files=",".join(attachments))
         logger.log(NETWORK, log_message)
         try:
-            res = self.session.request(url=url, method=method, timeout=self.config.http_timeout, **kwargs)
+            res = self.session.request(
+                url=url, method=method, timeout=self.config.http_timeout, **kwargs
+            )
         except Exception:
             raise
         logger.log(NETWORK, "HTTP Status: %d %s", res.status_code, res.reason)
@@ -257,7 +267,10 @@ class InsightsConnection(object):
 
         try:
             from insights_client import constants as insights_client_constants
-            client_version = "insights-client/{0}".format(insights_client_constants.InsightsConstants.version)
+
+            client_version = "insights-client/{0}".format(
+                insights_client_constants.InsightsConstants.version
+            )
         except ImportError:
             client_version = "insights-client"
 
@@ -298,8 +311,7 @@ class InsightsConnection(object):
             logger.debug("Proxy Scheme: %s", scheme)
             location = proxy_info.split('@')[1]
             logger.debug("Proxy Location: %s", location)
-            username = proxy_info.split(
-                '@')[0].split(':')[1].replace('/', '')
+            username = proxy_info.split('@')[0].split(':')[1].replace('/', '')
             logger.debug("Proxy User: %s", username)
             proxy_url = proxy_info
             proxy_info = scheme + location
@@ -307,7 +319,11 @@ class InsightsConnection(object):
         proxies = {"https": proxy_url}
         if no_proxy_info:
             insights_service_host = urlparse(self.base_url).hostname
-            logger.debug('Found NO_PROXY set. Checking NO_PROXY %s against base URL %s.', no_proxy_info, insights_service_host)
+            logger.debug(
+                'Found NO_PROXY set. Checking NO_PROXY %s against base URL %s.',
+                no_proxy_info,
+                insights_service_host,
+            )
             # Split the no_proxy entries on ',', then strip any leading and trailing whitespace.  Create a clean list for the
             # for loop.
             no_proxy_info = [host.strip() for host in no_proxy_info.split(',')]
@@ -320,11 +336,19 @@ class InsightsConnection(object):
                 elif no_proxy_host.startswith('.') or no_proxy_host.startswith('*'):
                     if insights_service_host.endswith(no_proxy_host.replace('*', '')):
                         proxies = None
-                        logger.debug('Found NO_PROXY range %s matching %s', no_proxy_host, insights_service_host)
+                        logger.debug(
+                            'Found NO_PROXY range %s matching %s',
+                            no_proxy_host,
+                            insights_service_host,
+                        )
                         break
                 elif no_proxy_host == insights_service_host:
                     proxies = None
-                    logger.debug('Found NO_PROXY %s exactly matching %s', no_proxy_host, insights_service_host)
+                    logger.debug(
+                        'Found NO_PROXY %s exactly matching %s',
+                        no_proxy_host,
+                        insights_service_host,
+                    )
                     break
         return proxies
 
@@ -345,9 +369,11 @@ class InsightsConnection(object):
         # HANDLE NO PROXY CONF PROXY EXCEPTION VERBIAGE
         no_proxy = os.environ.get('NO_PROXY')
         if no_proxy and conf_proxy:
-            logger.debug("You have environment variable NO_PROXY set "
-                         "as well as 'proxy' set in your configuration file. "
-                         "NO_PROXY environment variable will be ignored.")
+            logger.debug(
+                "You have environment variable NO_PROXY set "
+                "as well as 'proxy' set in your configuration file. "
+                "NO_PROXY environment variable will be ignored."
+            )
 
         # IF NO CONF PROXY and NO_PROX none in conf, GET ENV PROXY AND NO PROXY
         if proxies is None and conf_no_proxy is None:
@@ -375,16 +401,14 @@ class InsightsConnection(object):
                     test_req = self.get(test_url + ext)
                 # Strata returns 405 on a GET sometimes, this isn't a big deal
                 if test_req.status_code in (200, 201):
-                    logger.info(
-                        "Successfully connected to: %s", test_url + ext)
+                    logger.info("Successfully connected to: %s", test_url + ext)
                     return True
                 else:
                     logger.info("Connection failed")
                     return False
             except REQUEST_FAILED_EXCEPTIONS as exc:
                 last_ex = exc
-                logger.error(
-                    "Could not successfully connect to: %s", test_url + ext)
+                logger.error("Could not successfully connect to: %s", test_url + ext)
                 print(exc)
         if last_ex:
             raise last_ex
@@ -400,22 +424,24 @@ class InsightsConnection(object):
             if method == 'POST':
                 test_tar = TemporaryFile(mode='rb', suffix='.tar.gz')
                 test_files = {
-                    'file': ('test.tar.gz', test_tar, 'application/vnd.redhat.advisor.collection+tgz'),
-                    'metadata': '{\"test\": \"test\"}'
+                    'file': (
+                        'test.tar.gz',
+                        test_tar,
+                        'application/vnd.redhat.advisor.collection+tgz',
+                    ),
+                    'metadata': '{\"test\": \"test\"}',
                 }
                 test_req = self.post(url, files=test_files)
             elif method == "GET":
                 test_req = self.get(url)
             if test_req.status_code in (200, 201, 202):
-                logger.info(
-                    "Successfully connected to: %s", url)
+                logger.info("Successfully connected to: %s", url)
                 return True
             else:
                 logger.info("Connection failed")
                 return False
         except REQUEST_FAILED_EXCEPTIONS as exc:
-            logger.error(
-                "Could not successfully connect to: %s", url)
+            logger.error("Could not successfully connect to: %s", url)
             print(exc)
             raise
 
@@ -427,15 +453,18 @@ class InsightsConnection(object):
         try:
             logger.info("=== Begin Upload URL Connection Test ===")
             upload_success = self._test_urls(self.upload_url, "POST")
-            logger.info("=== End Upload URL Connection Test: %s ===\n",
-                        "SUCCESS" if upload_success else "FAILURE")
+            logger.info(
+                "=== End Upload URL Connection Test: %s ===\n",
+                "SUCCESS" if upload_success else "FAILURE",
+            )
             logger.info("=== Begin API URL Connection Test ===")
             if self.config.legacy_upload:
                 api_success = self._test_urls(self.base_url, "GET")
             else:
                 api_success = self._test_urls(self.base_url + '/apicast-tests/ping', 'GET')
-            logger.info("=== End API URL Connection Test: %s ===\n",
-                        "SUCCESS" if api_success else "FAILURE")
+            logger.info(
+                "=== End API URL Connection Test: %s ===\n", "SUCCESS" if api_success else "FAILURE"
+            )
             if upload_success and api_success:
                 logger.info("Connectivity tests completed successfully")
                 print("See %s for more details." % self.config.logging_file)
@@ -444,8 +473,7 @@ class InsightsConnection(object):
                 print("See %s for more details." % self.config.logging_file)
                 rc = 1
         except REQUEST_FAILED_EXCEPTIONS:
-            logger.error('Connectivity test failed! '
-                         'Please check your network configuration')
+            logger.error('Connectivity test failed! ' 'Please check your network configuration')
             print('Additional information may be in %s' % self.config.logging_file)
             return 1
         return rc
@@ -463,8 +491,7 @@ class InsightsConnection(object):
 
         # handle specific status codes
         if req.status_code >= 400:
-            logger.debug("Debug Information:\nHTTP Status Code: %s",
-                        req.status_code)
+            logger.debug("Debug Information:\nHTTP Status Code: %s", req.status_code)
             logger.debug("HTTP Status Text: %s", req.reason)
             if req.status_code == 401:
                 # check if the host is registered with subscription-manager
@@ -495,10 +522,14 @@ class InsightsConnection(object):
             if req.status_code == 403 and self.auto_config:
                 # Insights disabled in satellite
                 rhsm_hostname = urlparse(self.base_url).hostname
-                if (rhsm_hostname != 'subscription.rhn.redhat.com' and
-                   rhsm_hostname != 'subscription.rhsm.redhat.com'):
-                    logger.error('Please enable Insights on Satellite server '
-                                 '%s to continue.', rhsm_hostname)
+                if (
+                    rhsm_hostname != 'subscription.rhn.redhat.com'
+                    and rhsm_hostname != 'subscription.rhsm.redhat.com'
+                ):
+                    logger.error(
+                        'Please enable Insights on Satellite server ' '%s to continue.',
+                        rhsm_hostname,
+                    )
             if req.status_code == 404 or req.status_code == 409:
                 return False
             if req.status_code == 412:
@@ -537,8 +568,7 @@ class InsightsConnection(object):
         #     else:
         #         logger.debug(u'Cached branch info is older than 5 minutes.')
 
-        logger.debug(u'Obtaining branch information from %s',
-                     self.branch_info_url)
+        logger.debug(u'Obtaining branch information from %s', self.branch_info_url)
         response = self.get(self.branch_info_url)
         if response.status_code != 200:
             logger.debug("There was an error obtaining branch information.")
@@ -572,19 +602,19 @@ class InsightsConnection(object):
         remote_branch = branch_info['remote_branch']
         remote_leaf = branch_info['remote_leaf']
 
-        data = {'machine_id': machine_id,
-                'remote_branch': remote_branch,
-                'remote_leaf': remote_leaf,
-                'hostname': client_hostname}
+        data = {
+            'machine_id': machine_id,
+            'remote_branch': remote_branch,
+            'remote_leaf': remote_leaf,
+            'hostname': client_hostname,
+        }
         if self.config.display_name is not None:
             data['display_name'] = self.config.display_name
         data = json.dumps(data)
         post_system_url = self.api_url + '/v1/systems'
         logger.debug("POST System: %s", post_system_url)
         logger.debug(data)
-        return self.post(post_system_url,
-                         headers={'Content-Type': 'application/json'},
-                         data=data)
+        return self.post(post_system_url, headers={'Content-Type': 'application/json'}, data=data)
 
     # -LEGACY-
     def group_systems(self, group_name, systems):
@@ -621,49 +651,54 @@ class InsightsConnection(object):
                     logger.error("Group info does not contain information about ID")
 
             if api_group_id is None:
-                logger.warning("Unable to get ID of group: {group_name}".format(group_name=group_name))
+                logger.warning(
+                    "Unable to get ID of group: {group_name}".format(group_name=group_name)
+                )
             else:
-                logger.debug("Adding systems {systems} to the group {group_name}".format(
-                    systems=", ".join(system_ids), group_name=group_name
-                ))
+                logger.debug(
+                    "Adding systems {systems} to the group {group_name}".format(
+                        systems=", ".join(system_ids), group_name=group_name
+                    )
+                )
                 # Documentation for this REST API is here (groups POST /groups/{group_id}/hosts):
                 # yeah, links with anchors do not work as expected :-/
                 # https://console.redhat.com/docs/api/inventory/v1#operations-groups-api
                 data = json.dumps(system_ids)
                 post_systems = self.post(
-                    group_path +
-                    ('/%s/hosts' % api_group_id),
-                    headers=headers,
-                    data=data
+                    group_path + ('/%s/hosts' % api_group_id), headers=headers, data=data
                 )
                 if post_systems.status_code == 201:
-                    logger.info("Successfully added systems {systems} to the group {group_name}".format(
-                        systems=", ".join(system_ids), group_name=group_name
-                    ))
+                    logger.info(
+                        "Successfully added systems {systems} to the group {group_name}".format(
+                            systems=", ".join(system_ids), group_name=group_name
+                        )
+                    )
                 else:
-                    logger.error("Unable to add systems {systems} to the group {group_name}".format(
-                        systems=", ".join(system_ids), group_name=group_name
-                    ))
+                    logger.error(
+                        "Unable to add systems {systems} to the group {group_name}".format(
+                            systems=", ".join(system_ids), group_name=group_name
+                        )
+                    )
 
         if get_group.status_code == 404 or api_group_id is None:
-            logger.debug("Adding systems {systems} to new group {group_name}".format(
-                systems=", ".join(system_ids), group_name=group_name
-            ))
+            logger.debug(
+                "Adding systems {systems} to new group {group_name}".format(
+                    systems=", ".join(system_ids), group_name=group_name
+                )
+            )
 
             # Group does not exist, POST to create new group with host_ids
             # Documentation for this REST API end-point is here:
             # https://console.redhat.com/docs/api/inventory/v1#operations-groups-api
             data = json.dumps({"name": group_name, "host_ids": system_ids})
-            post_group = self.post(
-                group_path,
-                headers=headers,
-                data=data
-            )
+            post_group = self.post(group_path, headers=headers, data=data)
             self.handle_fail_rcs(post_group)
             if post_group.status_code == 201:
-                logger.info("Successfully created group {group_name} containing {systems}".format(
-                    systems=", ".join(system_ids), group_name=group_name
-                ))
+                logger.info(
+                    "Successfully created group {group_name} containing {systems}".format(
+                        systems=", ".join(system_ids), group_name=group_name
+                    )
+                )
             else:
                 logger.error("Unable to create group: {group_name}".format(group_name=group_name))
 
@@ -714,7 +749,9 @@ class InsightsConnection(object):
                 # check the 'unregistered_at' key of the response
                 unreg_status = json.loads(res.content).get('unregistered_at', 'undefined')
                 # set the global account number
-                self.config.account_number = json.loads(res.content).get('account_number', 'undefined')
+                self.config.account_number = json.loads(res.content).get(
+                    'account_number', 'undefined'
+                )
             except ValueError:
                 # bad response, no json object
                 return False
@@ -753,7 +790,7 @@ class InsightsConnection(object):
             _api_request_failed(e)
             return None
         try:
-            if (self.handle_fail_rcs(res)):
+            if self.handle_fail_rcs(res):
                 return None
             res_json = json.loads(res.content)
             res_json['insights_id'] = machine_id
@@ -772,13 +809,13 @@ class InsightsConnection(object):
 
     def api_registration_check(self):
         '''
-            Reach out to the inventory API to check
-            whether a machine exists.
+        Reach out to the inventory API to check
+        whether a machine exists.
 
-            Returns
-                True    system exists in inventory
-                False   system does not exist in inventory
-                None    error connection or parsing response
+        Returns
+            True    system exists in inventory
+            False   system does not exist in inventory
+            None    error connection or parsing response
         '''
         if self.config.legacy_upload:
             return self._legacy_api_registration_check()
@@ -803,8 +840,7 @@ class InsightsConnection(object):
             logger.debug("Unregistering %s", machine_id)
             url = self.api_url + "/v1/systems/" + machine_id
             self.delete(url)
-            logger.info(
-                "Successfully unregistered from the Red Hat Insights Service")
+            logger.info("Successfully unregistered from the Red Hat Insights Service")
             return True
         except requests.ConnectionError as e:
             logger.debug(e)
@@ -857,7 +893,9 @@ class InsightsConnection(object):
                 system_json = system.json()
                 machine_id = system_json["machine_id"]
                 account_number = system_json["account_number"]
-                logger.info("You successfully registered %s to account %s." % (machine_id, account_number))
+                logger.info(
+                    "You successfully registered %s to account %s." % (machine_id, account_number)
+                )
             except:
                 logger.debug('Received invalid JSON on system registration.')
                 logger.debug('API still indicates valid registration with 201 status code.')
@@ -875,22 +913,31 @@ class InsightsConnection(object):
         '''
         Some helpful messaging for when the archive is too large for ingress
         '''
-        archive_filesize = size_in_mb(
-            os.stat(archive_file).st_size)
-        logger.info("Archive is {fsize} MB which is larger than the maximum allowed size of {flimit} MB.".format(
-            fsize=archive_filesize, flimit=constants.archive_filesize_max))
+        archive_filesize = size_in_mb(os.stat(archive_file).st_size)
+        logger.info(
+            "Archive is {fsize} MB which is larger than the maximum allowed size of {flimit} MB.".format(
+                fsize=archive_filesize, flimit=constants.archive_filesize_max
+            )
+        )
 
         biggest_file = largest_spec_in_archive(archive_file)
-        logger.info("The largest file in the archive is %s at %s MB.", biggest_file[0], size_in_mb(biggest_file[1]))
-        logger.info("Please add the following spec to /etc/insights-client/file-redaction.yaml."
-        "According to the documentation https://access.redhat.com/articles/4511681\n\n"
-        "****  /etc/insights-client/file-redaction.yaml ****\n"
-        "# file-redaction.yaml\n"
-        "# Omit entire output of files\n"
-        "# Files can be specified either by full filename or\n"
-        "#   by the specs listed in insights/specs/default.py\n"
-        "files:\n"
-        "- %s \n**** ****", biggest_file[2])
+        logger.info(
+            "The largest file in the archive is %s at %s MB.",
+            biggest_file[0],
+            size_in_mb(biggest_file[1]),
+        )
+        logger.info(
+            "Please add the following spec to /etc/insights-client/file-redaction.yaml."
+            "According to the documentation https://access.redhat.com/articles/4511681\n\n"
+            "****  /etc/insights-client/file-redaction.yaml ****\n"
+            "# file-redaction.yaml\n"
+            "# Omit entire output of files\n"
+            "# Files can be specified either by full filename or\n"
+            "#   by the specs listed in insights/specs/default.py\n"
+            "files:\n"
+            "- %s \n**** ****",
+            biggest_file[2],
+        )
 
     # -LEGACY-
     def _legacy_upload_archive(self, data_collected, duration):
@@ -900,6 +947,7 @@ class InsightsConnection(object):
         file_name = os.path.basename(data_collected)
         try:
             from insights.contrib import magic
+
             m = magic.open(magic.MAGIC_MIME)
             m.load()
             mime_type = m.file(data_collected)
@@ -907,10 +955,10 @@ class InsightsConnection(object):
             magic = None
             logger.debug('python-magic not installed, using backup function...')
             from .utilities import magic_plan_b
+
             mime_type = magic_plan_b(data_collected)
 
-        files = {
-            'file': (file_name, open(data_collected, 'rb'), mime_type)}
+        files = {'file': (file_name, open(data_collected, 'rb'), mime_type)}
 
         upload_url = self.upload_url + '/' + generate_machine_id()
 
@@ -961,14 +1009,9 @@ class InsightsConnection(object):
         if self.config.branch_info:
             c_facts["branch_info"] = self.config.branch_info
             c_facts["satellite_id"] = self.config.branch_info["remote_leaf"]
-        # Clean (obfuscate and redact) the "c_facts"
-        c_facts = json.dumps(self._clean_facts(c_facts))
         logger.debug('Canonical facts collected:\n%s', c_facts)
 
-        files = {
-            'file': (file_name, open(data_collected, 'rb'), content_type),
-            'metadata': c_facts
-        }
+        files = {'file': (file_name, open(data_collected, 'rb'), content_type), 'metadata': c_facts}
         logger.debug('content-type: %s', content_type)
         logger.debug("Uploading %s to %s", data_collected, upload_url)
         try:
@@ -990,9 +1033,7 @@ class InsightsConnection(object):
                 else:
                     logger.error('Could not update local registration record: %s', str(e))
         else:
-            logger.debug(
-                "Upload archive failed with status code %s",
-                upload.status_code)
+            logger.debug("Upload archive failed with status code %s", upload.status_code)
             if upload.status_code == 413:
                 # let the user know what file is bloating the archive
                 self._archive_too_big(data_collected)
@@ -1012,22 +1053,21 @@ class InsightsConnection(object):
                 logger.debug('Display name unchanged: %s', old_display_name)
                 return True
 
-            res = self.put(url,
-                           headers={'Content-Type': 'application/json'},
-                           data=json.dumps(
-                               {'display_name': display_name}))
+            res = self.put(
+                url,
+                headers={'Content-Type': 'application/json'},
+                data=json.dumps({'display_name': display_name}),
+            )
             if res.status_code == 200:
-                logger.info('System display name changed from %s to %s',
-                            old_display_name,
-                            display_name)
+                logger.info(
+                    'System display name changed from %s to %s', old_display_name, display_name
+                )
                 return True
             elif res.status_code == 404:
-                logger.error('System not found. '
-                             'Please run insights-client --register.')
+                logger.error('System not found. ' 'Please run insights-client --register.')
                 return False
             else:
-                logger.error('Unable to set display name: %s %s',
-                             res.status_code, res.text)
+                logger.error('Unable to set display name: %s %s', res.status_code, res.text)
                 return False
         except REQUEST_FAILED_EXCEPTIONS + (ValueError,) as e:
             _api_request_failed(e, None)
@@ -1044,9 +1084,11 @@ class InsightsConnection(object):
         system = self._fetch_system_by_machine_id()
         if not system:
             if machine_id_exists() or os.path.exists(constants.registered_files[0]):
-                logger.error("Could not update display name.\n"
-                             "The system was not found in Inventory. Please, register the system again:\n"
-                             "# insights-client --register")
+                logger.error(
+                    "Could not update display name.\n"
+                    "The system was not found in Inventory. Please, register the system again:\n"
+                    "# insights-client --register"
+                )
             return system
         inventory_id = system['id']
 
@@ -1056,7 +1098,7 @@ class InsightsConnection(object):
         except REQUEST_FAILED_EXCEPTIONS as e:
             _api_request_failed(e)
             return False
-        if (self.handle_fail_rcs(res)):
+        if self.handle_fail_rcs(res):
             logger.error('Could not update display name.')
             return False
         logger.info('Display name updated to ' + display_name + '.')
@@ -1069,9 +1111,11 @@ class InsightsConnection(object):
         system = self._fetch_system_by_machine_id()
         if not system:
             if machine_id_exists() or os.path.exists(constants.registered_files[0]):
-                logger.error("Could not update Ansible hostname.\n"
-                             "The system was not found in Inventory. Please, register the system again:\n"
-                             "# insights-client --register")
+                logger.error(
+                    "Could not update Ansible hostname.\n"
+                    "The system was not found in Inventory. Please, register the system again:\n"
+                    "# insights-client --register"
+                )
             return system
         inventory_id = system['id']
 
@@ -1081,7 +1125,7 @@ class InsightsConnection(object):
         except REQUEST_FAILED_EXCEPTIONS as e:
             _api_request_failed(e)
             return False
-        if (self.handle_fail_rcs(res)):
+        if self.handle_fail_rcs(res):
             logger.error('Could not update Ansible hostname.')
             return False
         logger.info('Ansible hostname updated to ' + ansible_host + '.')
@@ -1089,13 +1133,15 @@ class InsightsConnection(object):
 
     def get_diagnosis(self):
         '''
-            Reach out to the platform and fetch a diagnosis.
-            Spirtual successor to --to-json from the old client.
+        Reach out to the platform and fetch a diagnosis.
+        Spirtual successor to --to-json from the old client.
         '''
         if not self._fetch_system_by_machine_id():
-            logger.error("Could not get diagnosis data.\n"
-                         "This host is not registered. Use --register to register this host:\n"
-                         "# insights-client --register")
+            logger.error(
+                "Could not get diagnosis data.\n"
+                "This host is not registered. Use --register to register this host:\n"
+                "# insights-client --register"
+            )
             return False
 
         # this uses machine id as identifier instead of inventory id
@@ -1105,20 +1151,21 @@ class InsightsConnection(object):
         except (requests.ConnectionError, requests.Timeout) as e:
             _api_request_failed(e)
             return False
-        if (self.handle_fail_rcs(res)):
-            logger.error('Unable to get diagnosis data: %s %s',
-                         res.status_code, res.text)
+        if self.handle_fail_rcs(res):
+            logger.error('Unable to get diagnosis data: %s %s', res.status_code, res.text)
             return None
         return res.json()
 
     def get_advisor_report(self):
         '''
-            Retrieve advisor report
+        Retrieve advisor report
         '''
         if not os.path.isfile(constants.registered_files[0]):
-            raise Exception("Could not retrieve advisor report.\n"
-                            "This host is not registered. Use --register to register this host:\n"
-                            "# insights-client --register")
+            raise Exception(
+                "Could not retrieve advisor report.\n"
+                "This host is not registered. Use --register to register this host:\n"
+                "# insights-client --register"
+            )
 
         url = self.inventory_url + "/hosts?insights_id=%s" % generate_machine_id()
         res = self.get(url)
@@ -1129,12 +1176,14 @@ class InsightsConnection(object):
         if host_details["total"] < 1:
             _host_not_found()
         if host_details["total"] > 1:
-            raise Exception("Error: multiple hosts detected (insights_id = %s). "
-                            "To fix this error, unregister this host first and then register again.\n"
-                            "\n1. Unregister with insights-client"
-                            "\n# insights-client --unregister\n"
-                            "\n2. Register with insights-client"
-                            "\n# insights-client --register" % generate_machine_id())
+            raise Exception(
+                "Error: multiple hosts detected (insights_id = %s). "
+                "To fix this error, unregister this host first and then register again.\n"
+                "\n1. Unregister with insights-client"
+                "\n# insights-client --unregister\n"
+                "\n2. Register with insights-client"
+                "\n# insights-client --register" % generate_machine_id()
+            )
 
         if not os.path.exists("/var/lib/insights"):
             os.makedirs("/var/lib/insights", mode=0o750)
@@ -1156,7 +1205,7 @@ class InsightsConnection(object):
 
     def get_latest_advisor_report(self):
         '''
-            Retrieve the latest advisor report
+        Retrieve the latest advisor report
         '''
         results = self._fetch_system_by_machine_id()
         if not results:
@@ -1174,19 +1223,20 @@ class InsightsConnection(object):
 
     def checkin(self):
         '''
-            Sends an ultralight check-in request containing only the Canonical Facts.
+        Sends an ultralight check-in request containing only the Canonical Facts.
         '''
         logger.info("Checking in...")
 
         if not self._fetch_system_by_machine_id():
-            logger.error("This host is not registered. "
-                         "Use --register to register this host:\n"
-                         "# insights-client --register")
+            logger.error(
+                "This host is not registered. "
+                "Use --register to register this host:\n"
+                "# insights-client --register"
+            )
             return False
 
         try:
             canonical_facts = get_canonical_facts()
-            canonical_facts = self._clean_facts(canonical_facts)
         except Exception as e:
             print('Error getting canonical facts: %s', e)
             logger.debug('Error getting canonical facts: %s', e)
@@ -1219,22 +1269,3 @@ class InsightsConnection(object):
         else:
             logger.debug("Check-in response body %s" % response.text)
             raise RuntimeError("Unknown check-in API response")
-
-    def _clean_facts(self, cfacts):
-        def _deep_clean(data):
-            """
-            Clean (obfuscate and redact) the data items one by one.
-            """
-            if isinstance(data, dict):
-                for key, values in data.items():
-                    data[key] = _deep_clean(values)
-            elif isinstance(data, list):
-                for i, item in enumerate(data):
-                    data[i] = _deep_clean(item)
-            elif isinstance(data, str):
-                return _cleaner.clean_content(data)
-            return data
-        # Clean (obfuscate and redact) the "c_facts"
-        pc = InsightsUploadConf(self.config)
-        _cleaner = cleaner.Cleaner(self.config, pc.get_rm_conf())
-        return _deep_clean(cfacts)
