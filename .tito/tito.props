@@ -7,3 +7,6 @@ tag_format = {component}-{version}
 [version_template]
 template_file = ./.tito/version_template_file
 destination_file = ./insights/VERSION
+[release_template]
+template_file = ./.tito/release_template_file
+destination_file = ./insights/RELEASE
