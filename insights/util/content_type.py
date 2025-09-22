@@ -1,7 +1,6 @@
 import shlex
 import subprocess
 from subprocess import PIPE
-import six
 from threading import Lock
 
 try:
@@ -25,7 +24,9 @@ magic_lock = Lock()
 def from_file(name):
     if magic_loaded:
         with magic_lock:
-            return six.b(_magic.file(name)).decode("unicode-escape").splitlines()[0].strip()
+            return (
+                bytes(_magic.file(name), "utf-8").decode("unicode-escape").splitlines()[0].strip()
+            )
     else:
         cmd = "file --mime-type -b %s"
         p = subprocess.Popen(shlex.split(cmd % name), stdout=subprocess.PIPE)

@@ -1,11 +1,9 @@
-import codecs
 import itertools
 import logging
 import os
 import re
 import shlex
 import signal
-import six
 import traceback
 
 from collections import defaultdict
@@ -48,8 +46,6 @@ A minimal set of environment variables for use in subprocess calls
 if "LANG" in os.environ:
     SAFE_ENV["LANG"] = os.environ["LANG"]
 PATH_ENV_OVERRIDER = "PATH=%s:$PATH" % SAFE_ENV["PATH"]
-
-safe_open, encoding = (open, "utf-8") if six.PY3 else (codecs.open, None)
 
 
 class ContentProvider(object):
@@ -144,7 +140,7 @@ class ContentProvider(object):
         fs.ensure_path(os.path.dirname(dst))
         # Clean Spec Content when writing it down to disk before uploading
         content = "\n".join(self._clean_content())
-        content = content.encode("utf-8") if six.PY3 else content
+        content = content.encode("utf-8")
         with open(dst, "wb") as f:
             f.write(content)
 
@@ -288,7 +284,7 @@ class TextFileProvider(FileProvider):
             return out
 
         fsize = os.stat(self.path).st_size
-        with safe_open(self.path, "r", encoding=encoding, errors="surrogateescape") as f:
+        with open(self.path, "r", encoding="utf-8", errors="surrogateescape") as f:
             if fsize > MAX_CONTENT_SIZE:
                 # read the last ``MAX_CONTENT_SIZE`` MB only
                 f.seek(fsize - MAX_CONTENT_SIZE)
@@ -316,9 +312,7 @@ class TextFileProvider(FileProvider):
                     with streams.connect(*args, env=SAFE_ENV) as s:
                         yield s
                 else:
-                    with safe_open(
-                        self.path, "r", encoding=encoding, errors="surrogateescape"
-                    ) as f:
+                    with open(self.path, "r", encoding="utf-8", errors="surrogateescape") as f:
                         yield f
         except StopIteration:
             raise
@@ -357,7 +351,7 @@ class CommandOutputProvider(ContentProvider):
         cleaner=None,
     ):
         super(CommandOutputProvider, self).__init__()
-        self.cmd = cmd if six.PY3 else str(cmd)
+        self.cmd = cmd
         self.root = root
         self.save_as = save_as
         self.ctx = ctx
@@ -683,7 +677,7 @@ class SpecSetMeta(type):
         _resolve_registry_points(cls, bases[0], dct)
 
 
-class SpecSet(six.with_metaclass(SpecSetMeta)):
+class SpecSet(object, metaclass=SpecSetMeta):
     """
     The base class for all spec declarations. Extend this class and define your
     datasources directly or with a `SpecFactory`.
@@ -772,7 +766,7 @@ class glob_file(object):
         deps=None,
         kind=TextFileProvider,
         max_files=1000,
-        **kwargs
+        **kwargs,
     ):
         deps = deps if deps is not None else []
         if not isinstance(patterns, (list, set)):
@@ -1006,7 +1000,7 @@ class simple_command(object):
         inherit_env=None,
         override_env=None,
         signum=None,
-        **kwargs
+        **kwargs,
     ):
         deps = deps if deps is not None else []
         self.cmd = cmd
@@ -1086,10 +1080,10 @@ class command_with_args(object):
         inherit_env=None,
         override_env=None,
         signum=None,
-        **kwargs
+        **kwargs,
     ):
         deps = deps if deps is not None else []
-        self.cmd = cmd if six.PY3 else str(cmd)
+        self.cmd = cmd
         self.provider = provider
         self.save_as = save_as.strip("/") if save_as else None  # strip as a relative file path
         self.context = context
@@ -1109,7 +1103,7 @@ class command_with_args(object):
         ctx = broker[self.context]
         if isinstance(source, ContentProvider):
             source = source.content
-        if not isinstance(source, (six.text_type, str, tuple)):
+        if not isinstance(source, (str, tuple)):
             raise ContentException(
                 "The provider can only be a single string or a tuple of strings, but got '%s'."
                 % source
@@ -1184,7 +1178,7 @@ class foreach_execute(object):
         inherit_env=None,
         override_env=None,
         signum=None,
-        **kwargs
+        **kwargs,
     ):
         deps = deps if deps is not None else []
         self.provider = provider
@@ -1268,7 +1262,7 @@ class foreach_collect(object):
         context=HostContext,
         deps=None,
         kind=TextFileProvider,
-        **kwargs
+        **kwargs,
     ):
         deps = deps if deps is not None else []
         self.provider = provider
@@ -1440,7 +1434,7 @@ class container_collect(foreach_execute):
         inherit_env=None,
         override_env=None,
         signum=None,
-        **kwargs
+        **kwargs,
     ):
         super(container_collect, self).__init__(
             provider,
@@ -1453,7 +1447,7 @@ class container_collect(foreach_execute):
             inherit_env,
             override_env,
             signum,
-            **kwargs
+            **kwargs,
         )
 
     def __call__(self, broker):

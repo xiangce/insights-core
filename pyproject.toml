@@ -9,7 +9,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Natural Language :: English",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 2.7",
     "Programming Language :: Python :: 3.6",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -18,22 +17,19 @@ classifiers = [
 ]
 license = {file = "LICENSE"}
 dynamic = ["version", "readme"]
-requires-python = ">=2.7"
+requires-python = ">=3.6"
 dependencies = [
     "cachecontrol",
     "cachecontrol[filecache]",
     "cachecontrol[redis]",
     "defusedxml",
-    "jinja2; python_version > '2.7' and python_version <= '3.6'",
-    "jinja2<=2.11.3; python_version <= '2.7'",
-    "jinja2>=3.1.6;  python_version > '3.6'",
+    "jinja2>=3.1.6",
     "lockfile",
     "pyyaml",
     "redis",
     "requests",
-    "rpm; python_version >= '3.6'",
+    "rpm'",
     "setuptools; python_version < '3.10'", # for pkg_resources
-    "six",
 ]
 
 [project.urls]
@@ -69,8 +65,7 @@ testing = [
     "coverage",
     "mock==2.0.0",  # FIXME: remove for python 3.6 and newer
     "pytest-cov",
-    "pytest; python_version >= '3'",
-    "pytest~=4.6.0; python_version == '2.7'",
+    "pytest",
 ]
 
 [project.scripts]

@@ -5,20 +5,12 @@ import functools
 import platform
 import os
 import warnings
-import datetime
 
 
 TMP_DIR = os.path.join("/tmp", "insights-web")
 logger = logging.getLogger(__name__)
 
-TRUTH = {
-    "true": True,
-    "false": False,
-    "yes": True,
-    "no": False,
-    "1": True,
-    "0": False
-}
+TRUTH = {"true": True, "false": False, "yes": True, "no": False, "1": True, "0": False}
 
 
 def parse_bool(s, default=False):
@@ -31,29 +23,6 @@ def parse_bool(s, default=False):
     if s is None:
         return default
     return TRUTH.get(s.lower(), default)
-
-
-# python2 doesn't have a utc tzinfo by default
-# see https://docs.python.org/2/library/datetime.html#tzinfo-objects
-try:
-    utc = datetime.timezone.utc
-except:
-    class UTC(datetime.tzinfo):
-        """
-        A tzinfo class for UTC.
-        """
-        ZERO = datetime.timedelta(0)
-
-        def utcoffset(self, dt):
-            return self.ZERO
-
-        def tzname(self, dt):
-            return "UTC"
-
-        def dst(self, dt):
-            return self.ZERO
-
-    utc = UTC()
 
 
 def which(cmd, env=None):
@@ -74,7 +43,7 @@ def which(cmd, env=None):
 
 
 class KeyPassingDefaultDict(collections.defaultdict):
-    """ A default dict that passes the key to its factory function. """
+    """A default dict that passes the key to its factory function."""
 
     def __init__(self, *args, **kwargs):
         super(KeyPassingDefaultDict, self).__init__(*args, **kwargs)
@@ -103,6 +72,7 @@ def defaults(default=None):
     default : object
         The default value to return if the wrapped function throws an exception
     """
+
     def _f(func):
         @functools.wraps(func)
         def __f(self, *args, **kwargs):
@@ -110,7 +80,9 @@ def defaults(default=None):
                 return func(self, *args, **kwargs)
             except Exception:
                 return default
+
         return __f
+
     return _f
 
 
@@ -207,8 +179,9 @@ def ensure_dir(path, dirname=False):
 
 
 def _create_log_record(msg, date, level, machine_id):
-    log_record = logging.LogRecord("upload_client", logging.getLevelName(level),
-                                   machine_id, None, msg.strip(), None, None)
+    log_record = logging.LogRecord(
+        "upload_client", logging.getLevelName(level), machine_id, None, msg.strip(), None, None
+    )
     log_record.asctime = date
     return log_record
 
@@ -242,7 +215,7 @@ def rsplit(_str, seps):
     """
     for idx, ch in enumerate(reversed(_str)):
         if ch in seps:
-            return _str[0:-idx - 1], _str[-idx:]
+            return _str[0 : -idx - 1], _str[-idx:]
 
 
 def check_path(path):

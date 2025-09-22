@@ -47,12 +47,12 @@ def test_repr(sample_directory):
     assert repr(provider) == "DummyFileProvider('%s/%s')" % (sample_directory, SAMPLE_FILE)
 
 
-@pytest.mark.skipif(
-    # GitHub workflows run Python 2.7 and 3.6 tests in containers, because these old Python
-    # versions are not available in GitHub-hosted runners anymore. The tests are executed as root.
-    os.getuid() == 0,
-    reason="Test must not be run as root. Root ignores file mode bits."
-)
+# @pytest.mark.skipif(
+#     # GitHub workflows run Python 2.7 and 3.6 tests in containers, because these old Python
+#     # versions are not available in GitHub-hosted runners anymore. The tests are executed as root.
+#     os.getuid() == 0,
+#     reason="Test must not be run as root. Root ignores file mode bits."
+# )
 @pytest.mark.parametrize(
     "relpath,exception_type,match",
     [
@@ -60,7 +60,7 @@ def test_repr(sample_directory):
         ("no_such_file.txt", ContentException, "does not exist"),
         # file outside root that exists
         ("../../sample_file.txt", Exception, "Relative path points outside the root"),
-    ]
+    ],
 )
 def test_validate(sample_directory, relpath, exception_type, match):
     with pytest.raises(exception_type, match=match):
