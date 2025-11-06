@@ -1,5 +1,3 @@
-import pytest
-import sys
 import tempfile
 
 from insights.core.hydration import get_all_files
@@ -26,7 +24,7 @@ def test_get_all_files():
 
 # here we also skip testing it in Python 3.6, as `root` might be used in the
 # test image, "Error 13" won't be occurred
-@pytest.mark.skipif(sys.version_info < (3, 8), reason="This issue only occurs on python3+.")
+# @pytest.mark.skipif(sys.version_info < (3, 8), reason="This issue only occurs on python3+.")
 def test_get_all_files_oserror(caplog):
     tmp_dir = tempfile.mkdtemp()
 
