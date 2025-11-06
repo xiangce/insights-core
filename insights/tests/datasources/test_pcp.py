@@ -1,7 +1,7 @@
 import datetime
 import pytest
 
-from mock.mock import patch
+from unittest.mock import patch
 
 from insights.client.config import InsightsConfig
 from insights.combiners.ps import Ps
@@ -13,11 +13,12 @@ from insights.parsers.ros_config import RosConfig
 from insights.parsers.systemd.unitfiles import UnitFiles
 from insights.specs.datasources import pcp
 from insights.specs.datasources.pcp import (
-        pcp_enabled,
-        pcp_raw_files,
-        pmlog_summary_args_pcp_zeroconf,
-        pmlog_summary_args,
-        ros_collect)
+    pcp_enabled,
+    pcp_raw_files,
+    pmlog_summary_args_pcp_zeroconf,
+    pmlog_summary_args,
+    ros_collect,
+)
 from insights.tests import context_wrap
 
 
@@ -184,11 +185,14 @@ def test_pcp_raw_files(_exists, _isfile, _glob, mtime):
 
     ret = pcp_raw_files(broker)
     # test.rh.com is expected, with mtime=2
-    assert sorted(set(ret)) == sorted([
-        "/var/log/pcp/pmlogger/test/{0}.0.xz".format(yesterday),
-        "/var/log/pcp/pmlogger/test/{0}.1.xz".format(yesterday),
-        "/var/log/pcp/pmlogger/test/{0}.index".format(yesterday),
-        "/var/log/pcp/pmlogger/test/{0}.meta.xz".format(yesterday)])
+    assert sorted(set(ret)) == sorted(
+        [
+            "/var/log/pcp/pmlogger/test/{0}.0.xz".format(yesterday),
+            "/var/log/pcp/pmlogger/test/{0}.1.xz".format(yesterday),
+            "/var/log/pcp/pmlogger/test/{0}.index".format(yesterday),
+            "/var/log/pcp/pmlogger/test/{0}.meta.xz".format(yesterday),
+        ]
+    )
 
 
 @patch("insights.specs.datasources.pcp.os.path.getmtime", return_value=1)

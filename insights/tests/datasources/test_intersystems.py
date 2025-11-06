@@ -1,9 +1,12 @@
 import pytest
 
-from mock.mock import patch
+from unittest.mock import patch
 from insights.core.exceptions import SkipComponent
 from insights.parsers.iris import IrisList, IrisCpf
-from insights.specs.datasources.intersystems import iris_working_configuration, iris_working_messages_log
+from insights.specs.datasources.intersystems import (
+    iris_working_configuration,
+    iris_working_messages_log,
+)
 from insights.tests import context_wrap
 
 

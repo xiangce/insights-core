@@ -2,7 +2,7 @@ import sys
 from insights import get_nvr
 from insights.command_parser import InsightsCli
 import pytest
-from mock import patch
+from unittest.mock import patch
 
 VERSION_OUT = get_nvr() + '\n'
 
@@ -16,7 +16,7 @@ def test_insights_cli_version(capsys):
         ["insights", "inspect", "--version"],
         ["insights", "info", "--version"],
         ["insights", "ocpshell", "--version"],
-        ["insights", "run", "--version"]
+        ["insights", "run", "--version"],
     ]
     for args in test_args_list:
         with patch.object(sys, 'argv', args):

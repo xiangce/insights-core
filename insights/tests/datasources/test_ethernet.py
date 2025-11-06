@@ -1,6 +1,6 @@
 import pytest
 
-from mock.mock import Mock
+from unittest.mock import Mock
 
 from insights.core.exceptions import SkipComponent
 from insights.parsers.nmcli import NmcliConnShow
@@ -67,9 +67,7 @@ def test_ethernet_interfaces_bad():
 def test_team_device_1():
     mmcli_c_show = NmcliConnShow(context_wrap(NMCLI_C_SHOW_OUTPUT_1))
 
-    broker = {
-        NmcliConnShow: mmcli_c_show
-    }
+    broker = {NmcliConnShow: mmcli_c_show}
     result = team_interfaces(broker)
     assert result is not None
     assert isinstance(result, list)
@@ -79,9 +77,7 @@ def test_team_device_1():
 def test_team_device_2():
     mmcli_c_show = NmcliConnShow(context_wrap(NMCLI_C_SHOW_OUTPUT_2))
 
-    broker = {
-        NmcliConnShow: mmcli_c_show
-    }
+    broker = {NmcliConnShow: mmcli_c_show}
     with pytest.raises(SkipComponent):
         team_interfaces(broker)
 
@@ -89,9 +85,7 @@ def test_team_device_2():
 def test_team_device_3():
     mmcli_c_show = NmcliConnShow(context_wrap(NMCLI_C_SHOW_OUTPUT_3))
 
-    broker = {
-        NmcliConnShow: mmcli_c_show
-    }
+    broker = {NmcliConnShow: mmcli_c_show}
     with pytest.raises(SkipComponent):
         team_interfaces(broker)
 
@@ -99,8 +93,6 @@ def test_team_device_3():
 def test_team_device_bad():
     mmcli_c_show = NmcliConnShow(context_wrap(NMCLI_C_SHOW_EMPTY))
 
-    broker = {
-        NmcliConnShow: mmcli_c_show
-    }
+    broker = {NmcliConnShow: mmcli_c_show}
     with pytest.raises(SkipComponent):
         team_interfaces(broker)

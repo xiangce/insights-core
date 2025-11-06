@@ -1,7 +1,6 @@
-import mock
 import pytest
 
-from mock.mock import Mock
+from unittest.mock import patch, Mock
 from collections import defaultdict
 
 from insights.core import filters
@@ -58,8 +57,8 @@ def get_groups(users):
     return ["apache", "postgres"]
 
 
-@mock.patch("insights.specs.datasources.rpm.get_users", get_users)
-@mock.patch("insights.specs.datasources.rpm.get_groups", get_groups)
+@patch("insights.specs.datasources.rpm.get_users", get_users)
+@patch("insights.specs.datasources.rpm.get_groups", get_groups)
 def test_rpm():
     rpm_args = Mock()
     rpm_args.content = RPM_CMD.splitlines()

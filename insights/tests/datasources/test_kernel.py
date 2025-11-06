@@ -1,6 +1,6 @@
 import pytest
 
-from mock.mock import Mock
+from unittest.mock import Mock
 
 from insights.core.exceptions import SkipComponent
 from insights.specs.datasources.kernel import current_version, default_version
@@ -19,9 +19,7 @@ UNAME_ERROR_BLANK = ""
 def test_current_kernel_version():
     uname = Uname(context_wrap(UNAME))
 
-    broker = {
-        Uname: uname
-    }
+    broker = {Uname: uname}
     result = current_version(broker)
     assert result is not None
     assert result == '5.14.0-160.el9.x86_64'

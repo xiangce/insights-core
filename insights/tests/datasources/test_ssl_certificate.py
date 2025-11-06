@@ -1,12 +1,7 @@
 # -*- coding: utf-8 -*-
-
 import pytest
-try:
-    from unittest.mock import patch, mock_open
-    builtin_open = "builtins.open"
-except Exception:
-    from mock import patch, mock_open
-    builtin_open = "__builtin__.open"
+
+from unittest.mock import patch, mock_open
 
 from insights.combiners.rsyslog_confs import RsyslogAllConf
 from insights.core.exceptions import SkipComponent
@@ -15,9 +10,12 @@ from insights.parsers.rsyslog_conf import RsyslogConf
 from insights.specs import Specs
 from insights.specs.datasources import httpd
 from insights.specs.datasources.ssl_certificate import (
-    httpd_ssl_certificate_files, nginx_ssl_certificate_files,
-    mssql_tls_cert_file, httpd_certificate_info_in_nss,
-    rsyslog_tls_cert_file, rsyslog_tls_ca_cert_file
+    httpd_ssl_certificate_files,
+    nginx_ssl_certificate_files,
+    mssql_tls_cert_file,
+    httpd_certificate_info_in_nss,
+    rsyslog_tls_cert_file,
+    rsyslog_tls_ca_cert_file,
 )
 from insights.tests import context_wrap
 
@@ -315,57 +313,78 @@ queue.type = "LinkedList"
 
 
 @patch("os.path.exists", return_value=True)
-@patch(builtin_open, new_callable=mock_open, read_data=HTTPD_CONF)
+@patch("builtins.open", new_callable=mock_open, read_data=HTTPD_CONF)
 def test_httpd_certificate(m_open, m_exist):
     m_open.side_effect = [m_open.return_value, mock_open(read_data=HTTPD_SSL_CONF).return_value]
     broker = {
-        httpd.httpd_configuration_files: ['/etc/httpd/conf/httpd.conf', '/etc/httpd/conf.d/ssl.conf']
+        httpd.httpd_configuration_files: [
+            '/etc/httpd/conf/httpd.conf',
+            '/etc/httpd/conf.d/ssl.conf',
+        ]
     }
     result = httpd_ssl_certificate_files(broker)
     assert result == ['/etc/pki/katello/certs/gént-katello-apache.crt']
 
     m_open.side_effect = [m_open.return_value, mock_open(read_data=HTTPD_SSL_CONF_2).return_value]
     broker = {
-        httpd.httpd_configuration_files: ['/etc/httpd/conf/httpd.conf', '/etc/httpd/conf.d/ssl.conf']
+        httpd.httpd_configuration_files: [
+            '/etc/httpd/conf/httpd.conf',
+            '/etc/httpd/conf.d/ssl.conf',
+        ]
     }
     result = httpd_ssl_certificate_files(broker)
     # "/etc/pki/katello/certs/katello-apache_e.crt" not in the result
-    assert result == ['/etc/pki/katello/certs/katello-apache.crt', '/etc/pki/katello/certs/katello-apache_d.crt']
+    assert result == [
+        '/etc/pki/katello/certs/katello-apache.crt',
+        '/etc/pki/katello/certs/katello-apache_d.crt',
+    ]
 
 
 def test_nginx_certificate():
     conf1 = context_wrap(NGINX_CONF, path='/etc/nginx/nginx.conf')
     conf2 = context_wrap(NGINX_SSL_CONF, path='/etc/nginx/conf.d/ssl.conf')
 
-    broker = {
-        Specs.nginx_conf: [conf1, conf2]
-    }
+    broker = {Specs.nginx_conf: [conf1, conf2]}
     result = nginx_ssl_certificate_files(broker)
     assert result == ['/a/b/c.cecdsa.crt', '/a/b/c.rsa.crt']
 
     conf1 = context_wrap(NGINX_CONF, path='/etc/nginx/nginx.conf')
     conf2 = context_wrap(NGINX_SSL_CONF_MULTIPLE_SERVERS, path='/etc/nginx/conf.d/ssl.conf')
 
-    broker = {
-        Specs.nginx_conf: [conf1, conf2]
-    }
+    broker = {Specs.nginx_conf: [conf1, conf2]}
     result = nginx_ssl_certificate_files(broker)
-    assert result == ['/a/b/www.example.com.cecdsa.crt', '/a/b/www.example.com.crt', '/a/b/www.example.org.crt']
+    assert result == [
+        '/a/b/www.example.com.cecdsa.crt',
+        '/a/b/www.example.com.crt',
+        '/a/b/www.example.org.crt',
+    ]
 
 
 @patch("os.path.exists", return_value=True)
-@patch(builtin_open, new_callable=mock_open, read_data=HTTPD_CONF)
+@patch("builtins.open", new_callable=mock_open, read_data=HTTPD_CONF)
 def test_httpd_ssl_cert_exception(m_open, m_exists):
-    m_open.side_effect = [m_open.return_value, mock_open(read_data=HTTPD_CONF_WITHOUT_SSL).return_value]
+    m_open.side_effect = [
+        m_open.return_value,
+        mock_open(read_data=HTTPD_CONF_WITHOUT_SSL).return_value,
+    ]
     broker1 = {
-        httpd.httpd_configuration_files: ['/etc/httpd/conf/httpd.conf', '/etc/httpd/conf.d/no_ssl.conf']
+        httpd.httpd_configuration_files: [
+            '/etc/httpd/conf/httpd.conf',
+            '/etc/httpd/conf.d/no_ssl.conf',
+        ]
     }
     with pytest.raises(SkipComponent):
         httpd_ssl_certificate_files(broker1)
 
-    m_open.side_effect = [m_open.return_value, mock_open(read_data=HTTPD_SSL_CONF_NO_VALUE).return_value]
+    m_open.side_effect = [
+        m_open.return_value,
+        mock_open(read_data=HTTPD_SSL_CONF_NO_VALUE).return_value,
+    ]
     broker2 = {
-        httpd.httpd_configuration_files: ['/etc/httpd/conf/httpd.conf', '/etc/httpd/conf.d/no_ssl.conf']
+        httpd.httpd_configuration_files: [
+            '/etc/httpd/conf/httpd.conf',
+            '/etc/httpd/conf.d/no_ssl.conf',
+        ]
     }
     with pytest.raises(SkipComponent):
         httpd_ssl_certificate_files(broker2)
@@ -374,48 +393,48 @@ def test_httpd_ssl_cert_exception(m_open, m_exists):
 def test_nginx_ssl_cert_exception():
     conf1 = context_wrap(NGINX_CONF, path='/etc/nginx/nginx.conf')
     conf2 = context_wrap(NGINX_CONF_WITHOUT_SSL, path='/etc/nginx/conf.d/no_ssl.conf')
-    broker1 = {
-        Specs.nginx_conf: [conf1, conf2]
-    }
+    broker1 = {Specs.nginx_conf: [conf1, conf2]}
     with pytest.raises(SkipComponent):
         nginx_ssl_certificate_files(broker1)
 
 
 def test_mssql_tls_cert_exception():
     conf1 = MsSQLConf(context_wrap(MSSQL_WITH_TLS, path='/var/opt/mssql/mssql.conf'))
-    broker1 = {
-        MsSQLConf: conf1
-    }
+    broker1 = {MsSQLConf: conf1}
     result = mssql_tls_cert_file(broker1)
     assert result == "/tmp/mssql.pem"
 
 
 def test_mssql_tls_no_cert_exception():
     conf1 = MsSQLConf(context_wrap(MSSQL_WITHOUT_TLS, path='/var/opt/mssql/mssql.conf'))
-    broker1 = {
-        MsSQLConf: conf1
-    }
+    broker1 = {MsSQLConf: conf1}
     with pytest.raises(SkipComponent):
         mssql_tls_cert_file(broker1)
 
 
 @patch("os.path.exists", return_value=True)
-@patch(builtin_open, new_callable=mock_open, read_data=HTTPD_CONF)
+@patch("builtins.open", new_callable=mock_open, read_data=HTTPD_CONF)
 def test_httpd_certificate_info_in_nss(m_open, m_exists):
     m_open.side_effect = [m_open.return_value, mock_open(read_data=HTTPD_WITH_NSS).return_value]
     broker = {
-        httpd.httpd_configuration_files: ['/etc/httpd/conf/httpd.conf', '/etc/httpd/conf.d/nss.conf']
+        httpd.httpd_configuration_files: [
+            '/etc/httpd/conf/httpd.conf',
+            '/etc/httpd/conf.d/nss.conf',
+        ]
     }
     result = httpd_certificate_info_in_nss(broker)
     assert result == [('/etc/httpd/aliasa', 'testcertaê'), ('/etc/httpd/aliasb', 'testcertb')]
 
 
 @patch("os.path.exists", return_value=True)
-@patch(builtin_open, new_callable=mock_open, read_data=HTTPD_CONF)
+@patch("builtins.open", new_callable=mock_open, read_data=HTTPD_CONF)
 def test_httpd_certificate_info_in_nss_exception(m_open, m_exists):
     m_open.side_effect = [m_open.return_value, mock_open(read_data=HTTPD_WITH_NSS_OFF).return_value]
     broker = {
-        httpd.httpd_configuration_files: ['/etc/httpd/conf/httpd.conf', '/etc/httpd/conf.d/nss.conf']
+        httpd.httpd_configuration_files: [
+            '/etc/httpd/conf/httpd.conf',
+            '/etc/httpd/conf.d/nss.conf',
+        ]
     }
     with pytest.raises(SkipComponent):
         httpd_certificate_info_in_nss(broker)
@@ -424,17 +443,13 @@ def test_httpd_certificate_info_in_nss_exception(m_open, m_exists):
 def test_rsyslog_certification():
     rsys_par = RsyslogConf(context_wrap(RSYSLOG_TLS_CFG1, path='/etc/rsyslog.conf'))
     rsys_com = RsyslogAllConf([rsys_par])
-    broker = {
-        RsyslogAllConf: rsys_com
-    }
+    broker = {RsyslogAllConf: rsys_com}
     result = rsyslog_tls_cert_file(broker)
     assert result == '/etc/pki/rsyslog/sender-cert.pem'
 
     rsys_par = RsyslogConf(context_wrap(RSYSLOG_TLS_CFG2, path='/etc/rsyslog.conf'))
     rsys_com = RsyslogAllConf([rsys_par])
-    broker = {
-        RsyslogAllConf: rsys_com
-    }
+    broker = {RsyslogAllConf: rsys_com}
     result = rsyslog_tls_cert_file(broker)
     assert result == '/etc/rsyslog.d/certificates/crt/cert.crt'
 
@@ -442,9 +457,7 @@ def test_rsyslog_certification():
 def test_rsyslog_certification_exception():
     rsys_par = RsyslogConf(context_wrap(RSYSLOG_CFG3, path='/etc/rsyslog.conf'))
     rsys_com = RsyslogAllConf([rsys_par])
-    broker = {
-        RsyslogAllConf: rsys_com
-    }
+    broker = {RsyslogAllConf: rsys_com}
     with pytest.raises(SkipComponent):
         rsyslog_tls_cert_file(broker)
 
@@ -452,26 +465,22 @@ def test_rsyslog_certification_exception():
 def test_rsyslog_ca_certification():
     rsys_par = RsyslogConf(context_wrap(RSYSLOG_CLIENT_TLS_CA_CFG1, path='/etc/rsyslog.conf'))
     rsys_com = RsyslogAllConf([rsys_par])
-    broker = {
-        RsyslogAllConf: rsys_com
-    }
+    broker = {RsyslogAllConf: rsys_com}
     result = rsyslog_tls_ca_cert_file(broker)
     assert result == '/usr/share/pki/ca-trust-source/anchors/ca.cer'
 
     rsys_par = RsyslogConf(context_wrap(RSYSLOG_CLIENT_TLS_CA_CFG2, path='/etc/rsyslog.conf'))
     rsys_com = RsyslogAllConf([rsys_par])
-    broker = {
-        RsyslogAllConf: rsys_com
-    }
+    broker = {RsyslogAllConf: rsys_com}
     result = rsyslog_tls_ca_cert_file(broker)
     assert result == '/opt/services/dlc/keystore/public.cert.pem'
 
     rsys_par = RsyslogConf(context_wrap(RSYSLOG_CLIENT_TLS_CA_CFG3, path='/etc/rsyslog.conf'))
-    rsys_par2 = RsyslogConf(context_wrap(RSYSLOG_CLIENT_TLS_CA_BAD_CFG6, path='/etc/rsyslog.d/a.conf'))
+    rsys_par2 = RsyslogConf(
+        context_wrap(RSYSLOG_CLIENT_TLS_CA_BAD_CFG6, path='/etc/rsyslog.d/a.conf')
+    )
     rsys_com = RsyslogAllConf([rsys_par, rsys_par2])
-    broker = {
-        RsyslogAllConf: rsys_com
-    }
+    broker = {RsyslogAllConf: rsys_com}
     result = rsyslog_tls_ca_cert_file(broker)
     assert result == '/usr/share/pki/ca-trust-source/anchors/ca.cer'
 
@@ -481,13 +490,11 @@ def test_rsyslog_ca_certification_exception():
         RSYSLOG_CLIENT_TLS_CA_BAD_CFG3,
         RSYSLOG_CLIENT_TLS_CA_BAD_CFG4,
         RSYSLOG_CLIENT_TLS_CA_BAD_CFG5,
-        RSYSLOG_CLIENT_TLS_CA_BAD_CFG6
+        RSYSLOG_CLIENT_TLS_CA_BAD_CFG6,
     ]
     for bad_conf in bad_example_confs:
         rsys_par = RsyslogConf(context_wrap(bad_conf, path='/etc/rsyslog.conf'))
         rsys_com = RsyslogAllConf([rsys_par])
-        broker = {
-            RsyslogAllConf: rsys_com
-        }
+        broker = {RsyslogAllConf: rsys_com}
         with pytest.raises(SkipComponent):
             rsyslog_tls_ca_cert_file(broker)

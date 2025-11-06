@@ -5,11 +5,10 @@ import collections
 import pkgutil
 import sys
 
-import mock
 import pytest
 import tempfile
 import shutil
-from mock.mock import patch
+from unittest.mock import patch, MagicMock
 from pytest import raises
 
 from insights.client.constants import InsightsConstants as constants
@@ -120,7 +119,7 @@ class TestErrors:
 
     @patch('insights.client.apps.ansible.playbook_verifier.contrib.gnupg.GPG.verify_data')
     def test_playbook_verification_success(self, mock_method):
-        mock_method.return_value = mock.MagicMock(valid=True, status="mocked status")
+        mock_method.return_value = MagicMock(valid=True, status="mocked status")
         fake_playbook = {
             'name': "test playbook",
             'vars': {
@@ -457,7 +456,7 @@ class TestSerializePlaybookSnippet:
 
 
 class TestGetPlaybookSnippetRevocationList:
-    @mock.patch(
+    @patch(
         "insights.client.apps.ansible.playbook_verifier.verify_play",
         return_value=(True, b"snippet hash"),
     )
@@ -494,7 +493,7 @@ class TestGetPlaybookSnippetRevocationList:
             playbook_verifier.get_play_revocation_list(revoked_playbooks)
         assert "Could not load" in excinfo.value.message
 
-    @mock.patch(
+    @patch(
         "insights.client.apps.ansible.playbook_verifier.verify_play",
         return_value=(False, b"snippet hash"),
     )

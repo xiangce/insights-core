@@ -1,4 +1,4 @@
-from mock.mock import patch
+from unittest.mock import patch
 
 from insights import dr
 from insights.collect import apply_blacklist
@@ -13,33 +13,30 @@ def setup_function(func):
 @patch('insights.collect.log.warning')
 def test_apply_blacklist_valid(_log):
     rm_conf = {
-        'commands':
-            [
-                # simple_command
-                "/bin/df -alP -x autofs",
-                "/bin/ps aux",
-                # foreach_execute
-                "/bin/du -s -k",
-                # command_with_args
-                "/usr/bin/getent group",
-                # spec name
-                "installed_rpms",  # will be converted to component
-            ],
-        'files':
-            [
-                # simple_file
-                "/var/log/messages",
-                # first_file
-                "/proc/meminfo",
-                # glob_file
-                "/boot/config-",
-                # spec name
-                "container_installed_rpms",  # will be converted to component
-            ],
-        'components':
-            [
-                "insights.specs.default.DefaultSpecs.parted__l",
-            ]
+        'commands': [
+            # simple_command
+            "/bin/df -alP -x autofs",
+            "/bin/ps aux",
+            # foreach_execute
+            "/bin/du -s -k",
+            # command_with_args
+            "/usr/bin/getent group",
+            # spec name
+            "installed_rpms",  # will be converted to component
+        ],
+        'files': [
+            # simple_file
+            "/var/log/messages",
+            # first_file
+            "/proc/meminfo",
+            # glob_file
+            "/boot/config-",
+            # spec name
+            "container_installed_rpms",  # will be converted to component
+        ],
+        'components': [
+            "insights.specs.default.DefaultSpecs.parted__l",
+        ],
     }
 
     apply_blacklist(rm_conf)
@@ -75,9 +72,11 @@ def test_apply_blacklist_valid(_log):
 
 @patch('insights.collect.log.warning')
 def test_apply_blacklist_invalid(_log):
-    rm_conf = {'commands': ["test1", "/usr/bin/test"],
-               'files': ["test2", "/etc/test"],
-               'components': ['insights.specs.default.DefaultSpecs.test']}
+    rm_conf = {
+        'commands': ["test1", "/usr/bin/test"],
+        'files': ["test2", "/etc/test"],
+        'components': ['insights.specs.default.DefaultSpecs.test'],
+    }
 
     apply_blacklist(rm_conf)
 

@@ -7,7 +7,7 @@ try:
 
     builtin_open = "builtins.open"
 except Exception:
-    from mock import patch, mock_open
+    from unittest.mock import patch, mock_open
 
     builtin_open = "__builtin__.open"
 

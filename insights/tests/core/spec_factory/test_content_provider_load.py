@@ -1,8 +1,8 @@
 import os
-from collections import defaultdict
-
 import pytest
-from mock.mock import patch
+
+from collections import defaultdict
+from unittest.mock import patch
 
 from insights.core import dr
 from insights.core import filters
@@ -67,7 +67,7 @@ def sample_file(tmpdir_factory):
     [
         (Stuff.large_file, [], "- 949Some test data", 51),
         (Stuff.large_file_wf, ["9Some"], "- 949Some test data", 6),
-    ]
+    ],
 )
 def test_load(log, reset_filters, sample_file, spec, filters, expected_first_line, expected_lines):
     root, relpath = sample_file

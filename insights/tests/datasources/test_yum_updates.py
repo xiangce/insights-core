@@ -2,12 +2,13 @@ import json
 
 from insights.core.spec_factory import DatasourceProvider
 from insights.specs.datasources import yum_updates
-from mock.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 
 # Verify that the yum_updates broker correctly executes.
 def test_yum_updates_runs_correctly():
-    expected_json = json.dumps({
+    expected_json = json.dumps(
+        {
             "releasever": "8",
             "basearch": "x86_64",
             "update_list": {
@@ -18,14 +19,15 @@ def test_yum_updates_runs_correctly():
                             "repository": "rhel-8-for-x86_64-baseos-rpms",
                             "basearch": "x86_64",
                             "releasever": "8",
-                            "erratum": "RHSA-2020:3011"
+                            "erratum": "RHSA-2020:3011",
                         }
                     ]
                 }
             },
             "build_pkgcache": False,
             "metadata_time": "2021-01-01T09:39:45Z",
-    })
+        }
+    )
     # setup dnf mock
     with patch("insights.specs.datasources.yum_updates.UpdatesManager", yum_updates.DnfManager):
         yum_updates.dnf = MagicMock()
@@ -41,8 +43,15 @@ def test_yum_updates_runs_correctly():
         pkg = MagicMock(epoch=1, version="1.22.8", release="4.el8", arch="x86_64")
         pkg.name = "NetworkManager"
         yum_updates.dnf.base.Base().sack.query().installed().run.return_value = [pkg]
-        update = MagicMock(epoch=1, version="1.22.8", release="5.el8_2", arch="x86_64",
-                    reponame="rhel-8-for-x86_64-baseos-rpms", basearch="x86_64", releasever="8")
+        update = MagicMock(
+            epoch=1,
+            version="1.22.8",
+            release="5.el8_2",
+            arch="x86_64",
+            reponame="rhel-8-for-x86_64-baseos-rpms",
+            basearch="x86_64",
+            releasever="8",
+        )
         update.name = "NetworkManager"
         update.get_advisories.return_value = [MagicMock(id="RHSA-2020:3011")]
         yum_updates.dnf.base.Base().sack.query().filter.return_value = [update]

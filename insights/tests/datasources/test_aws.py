@@ -1,6 +1,6 @@
 import pytest
 
-from mock.mock import Mock
+from unittest.mock import Mock
 
 from insights.core.exceptions import SkipComponent
 from insights.specs.datasources.aws import LocalSpecs, aws_imdsv2_token
@@ -13,7 +13,9 @@ TOKEN_INVALID = "Warning: /root/.curlrc:1: warning: 'proxy' requires parameter"
 
 def test_aws_imdsv2_token():
     input_spec = Mock()
-    input_spec.content = [TOKEN, ]
+    input_spec.content = [
+        TOKEN,
+    ]
     broker = {LocalSpecs.aws_imdsv2_token: input_spec}
     results = aws_imdsv2_token(broker)
     assert results == TOKEN.strip()
@@ -28,13 +30,17 @@ def test_aws_imdsv2_token_exp():
     assert "Unexpected" in str(ex)
 
     input_spec = Mock()
-    input_spec.content = ["  ", ]
+    input_spec.content = [
+        "  ",
+    ]
     broker = {LocalSpecs.aws_imdsv2_token: input_spec}
     with pytest.raises(SkipComponent) as ex:
         aws_imdsv2_token(broker)
 
     input_spec = Mock()
-    input_spec.content = [TOKEN_INVALID, ]
+    input_spec.content = [
+        TOKEN_INVALID,
+    ]
     broker = {LocalSpecs.aws_imdsv2_token: input_spec}
     with pytest.raises(SkipComponent) as ex:
         aws_imdsv2_token(broker)

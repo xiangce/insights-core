@@ -2,13 +2,9 @@
 import os
 import json
 
-try:
-    from unittest.mock import patch
-except Exception:
-    from mock import patch
-
 from pytest import raises
 from tempfile import NamedTemporaryFile
+from unittest.mock import patch
 
 from insights.core.exceptions import SkipComponent
 from insights.client.config import InsightsConfig
@@ -519,7 +515,9 @@ def test_compliance_advisor_rule_enabled_policies_no_enabled_policy(config, poli
     compressor='gz',
     compliance=False,
 )
-def test_compliance_advisor_rule_enabled_policies_no_tailoring_policy(config, policies, tailoring_content):
+def test_compliance_advisor_rule_enabled_policies_no_tailoring_policy(
+    config, policies, tailoring_content
+):
     broker = {os_version: ['8', '10'], package_check: '0.1.73', 'client_config': config}
     ret = compliance_advisor_rule_enabled(broker)
     result = json.loads(ret.content[0])
@@ -548,21 +546,27 @@ def test_compliance_advisor_rule_enabled_policies_mixed_tailoring(
     # Setup: two policies, one with tailoring, one without
     policies = [
         {'ref_id': 'foo', 'id': '12345678-aaaa-bbbb-cccc-1234567890ab'},
-        {'ref_id': 'bar', 'id': '12345678-aaaa-bbbb-cccc-1234567890xy'}
+        {'ref_id': 'bar', 'id': '12345678-aaaa-bbbb-cccc-1234567890xy'},
     ]
     tailoring_content = {
         '12345678-aaaa-bbbb-cccc-1234567890ab': tailoring_policies_content2
         # No tailoring for '12345678-aaaa-bbbb-cccc-1234567890xy'
     }
     mock_get_system_policies.return_value = policies
-    mock_get_tailoring_content.side_effect = lambda policy_id: tailoring_content.get(policy_id['id'])
+    mock_get_tailoring_content.side_effect = lambda policy_id: tailoring_content.get(
+        policy_id['id']
+    )
     broker = {os_version: ['8', '10'], package_check: '0.1.73', 'client_config': mock_config}
     ret = compliance_advisor_rule_enabled(broker)
     result = json.loads(ret.content[0])
     assert len(result['enabled_policies']) == 2
     assert len(result['tailoring_policies']) == 1
-    assert any(p['id'] == '12345678-aaaa-bbbb-cccc-1234567890ab' for p in result['enabled_policies'])
-    assert any(p['id'] == '12345678-aaaa-bbbb-cccc-1234567890xy' for p in result['enabled_policies'])
+    assert any(
+        p['id'] == '12345678-aaaa-bbbb-cccc-1234567890ab' for p in result['enabled_policies']
+    )
+    assert any(
+        p['id'] == '12345678-aaaa-bbbb-cccc-1234567890xy' for p in result['enabled_policies']
+    )
     assert any(p['ref_id'] == 'foo' for p in result['tailoring_policies'])
     assert all(p['ref_id'] != 'bar' for p in result['tailoring_policies'])
     assert ret.relative_path == "insights_datasources/compliance_enabled_policies"
