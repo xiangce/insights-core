@@ -109,7 +109,7 @@ bzip2 -9 %{modulename}.pp
 
 %install
 rm -rf $RPM_BUILD_ROOT
-%{__python3} setup.py install -O1 --root $RPM_BUILD_ROOT
+%{__python3} -m pip install . --root $RPM_BUILD_ROOT
 rm -rf $RPM_BUILD_ROOT/usr/bin
 
 %if 0%{?with_selinux}
