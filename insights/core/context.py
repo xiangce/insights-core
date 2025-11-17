@@ -247,35 +247,5 @@ class SerializedArchiveContext(ExecutionContext):
 
 
 @fs_root
-class SosArchiveContext(ExecutionContext):
-    marker = "sos_commands"
-
-
-@fs_root
 class ClusterArchiveContext(ExecutionContext):
     pass
-
-
-@fs_root
-class DockerImageContext(ExecutionContext):
-    pass
-
-
-@fs_root
-class JBossContext(HostContext):
-    pass
-
-
-@fs_root
-class JDRContext(ExecutionContext):
-    marker = "JBOSS_HOME"
-
-    def locate_path(self, path):
-        p = path.replace("$JBOSS_HOME", "JBOSS_HOME")
-        return super(JDRContext, self).locate_path(p)
-
-
-class OpenStackContext(ExecutionContext):
-    def __init__(self, hostname):
-        super(OpenStackContext, self).__init__()
-        self.hostname = hostname

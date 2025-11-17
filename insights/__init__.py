@@ -42,7 +42,7 @@ from insights.core.plugins import (combiner, condition, datasource, fact, incide
 from insights.core.spec_factory import RawFileProvider, TextFileProvider
 from insights.formats import Formatter as FormatterClass, get_formatter
 from insights.parsers import get_active_lines  # noqa: F401
-from insights.parsers.ls import FileListing  # noqa: F401
+# from insights.parsers.ls import FileListing  # noqa: F401
 from insights.util import defaults  # noqa: F401
 
 log = logging.getLogger(__name__)

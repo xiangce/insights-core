@@ -738,6 +738,8 @@ class simple_file(object):
         self.kind = kind
         self.raw = kind is RawFileProvider
         self.__name__ = self.__class__.__name__
+        print('context=', self.context)
+        print('0.deps=', deps)
         datasource(self.context, *deps, raw=self.raw, **kwargs)(self)
 
     def __call__(self, broker):

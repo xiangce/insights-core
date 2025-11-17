@@ -29,9 +29,10 @@ Examples:
 """
 from insights import Parser, ContainerParser, parser
 from insights.specs import Specs
+from insights.specs.default import DefaultSpecs
 
 
-@parser(Specs.redhat_release)
+@parser(DefaultSpecs.redhat_release)
 class RedhatRelease(Parser):
     """Parses the content of file ``/etc/redhat-release``
 
@@ -48,6 +49,8 @@ class RedhatRelease(Parser):
     """
 
     def parse_content(self, content):
+        import pdb; pdb.set_trace()
+        print('content', content)
         self.raw = content[0]
         self.is_beta = False
         self.is_alpha = False
@@ -104,15 +107,3 @@ class RedhatRelease(Parser):
     def code_name(self):
         """string: code name of this OS or None."""
         return self.parsed["code_name"]
-
-
-@parser(Specs.container_redhat_release)
-class ContainerRedhatRelease(ContainerParser, RedhatRelease):
-    """
-    Parses the content of file ``/etc/redhat-release`` of the running
-    containers which are based on RHEL images.
-    """
-    @property
-    def rhel(self):
-        """string: alias of ``self.version``"""
-        return self.version

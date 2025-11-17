@@ -207,6 +207,7 @@ def collect(
     # 1. "client_config.manifest"
     # 2. "manifest" passed to the `insights.collect()`
     # 3. "default_manifest" defined in `insights.specs.manifests`
+    print('0.0-----components:', len(dr.COMPONENTS[dr.GROUPS.single]))
     manifest = manifests['default'] if manifest is None else manifest
     if client_config and hasattr(client_config, 'manifest') and client_config.manifest:
         manifest = client_config.manifest
@@ -215,7 +216,9 @@ def collect(
     client = manifest.get("client", {})
     plugins = manifest.get("plugins", {})
 
+    print('0.1-----components:', len(dr.COMPONENTS[dr.GROUPS.single]))
     load_packages(plugins.get("packages", []))
+    print('0.2-----components:', len(dr.COMPONENTS[dr.GROUPS.single]))
     apply_default_enabled(plugins)
     apply_configs(plugins)
     # process blacklist

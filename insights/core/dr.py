@@ -597,6 +597,7 @@ def stringify_requirements(requires):
 
 
 def _register_component(delegate):
+    #import traceback; traceback.print_stack()
     component = delegate.component
 
     dependencies = delegate.get_dependencies()
@@ -714,6 +715,8 @@ class ComponentType(object):
         for k, v in kwargs.items():
             setattr(self, k, v)
 
+        print('deps:', deps)
+        print('kwargs:', kwargs)
         self.component = None
         self.requires = []
         self.at_least_one = []
@@ -890,6 +893,7 @@ class Broker(object):
                 pass
 
         """
+        print('----add_observer', component_type, o)
 
         self.observers[component_type].add(o)
 
@@ -899,8 +903,10 @@ class Broker(object):
             return
 
         for k, v in self.observers.items():
+            print('fire---', _type, k, v)
             if issubclass(_type, k):
                 for o in v:
+                    print('fire innnnnnnnnnnnnnnnnnnnn')
                     try:
                         o(component, self)
                     except Exception as e:
@@ -1130,8 +1136,11 @@ def run(components=None, broker=None):
 
 
 def generate_incremental(components=None, broker=None):
+    print('1-----components:', components)
     components = components or COMPONENTS[GROUPS.single]
+    print('2-----components:', len(components))
     components = determine_components(components)
+    print('3-----components:', len(components))
     for graph in get_subgraphs(components):
         yield graph, broker or Broker()
 
