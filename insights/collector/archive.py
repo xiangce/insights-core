@@ -42,8 +42,6 @@ class InsightsArchive(object):
         Initialize the Insights Archive
         """
         self.config = config
-        # clean old temporary archive
-        self.cleanup_previous_archive()
 
         # Create a random temp directory
         # input this to core collector as `tmp_path`
@@ -217,31 +215,6 @@ class InsightsArchive(object):
 
     def sigterm_handler(_signo, _stack_frame, _context):
         sys.exit(1)
-
-    def cleanup_previous_archive(self):
-        '''
-        Used at the start, this will clean the temporary directory of previous killed runs
-        '''
-        try:
-            one_day_ago = time.time() - 24 * 60 * 60
-            # list insights-client temporary directories
-            directories = [
-                os.path.join(constants.insights_tmp_path, directory)
-                for directory in os.listdir(constants.insights_tmp_path)
-                if directory.startswith(constants.insights_tmp_prefix)
-            ]
-            # filter only those last modified more than 24 hours ago
-            directories = [
-                directory
-                for directory in directories
-                if os.path.isdir(directory) and os.path.getmtime(directory) <= one_day_ago
-            ]
-            # remove the directories
-            for directory in directories:
-                logger.debug("Deleting previous archive %s", directory)
-                shutil.rmtree(directory, True)
-        except Exception:
-            logger.error("ERROR: Could not remove old temporary directory")
 
     def storing_archive(self):
         if not os.path.exists(self.keep_archive_dir):
