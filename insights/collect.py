@@ -36,15 +36,16 @@ EXCEPTIONS_TO_REPORT = set([OSError])
 
 def load_manifest(data):
     """Helper for loading a manifest yaml doc."""
-    if isinstance(data, dict):
-        return data
-    if os.path.isfile(data):
-        with open(data, 'r') as f:
-            doc = yaml.safe_load(f)
+    if data:
+        if isinstance(data, dict):
+            return data
+        if os.path.isfile(data):
+            with open(data, 'r') as f:
+                doc = yaml.safe_load(f)
+        else:
+            doc = yaml.safe_load(data)
     else:
-        doc = yaml.safe_load(data)
-    if not isinstance(doc, dict):
-        raise Exception("Manifest didn't result in dict.")
+        raise Exception("Invalid Manifest.")
     return doc
 
 
@@ -167,14 +168,6 @@ def generate_archive_name():
     return "insights-%s-%s" % (hostname, suffix)
 
 
-def collect(
-    client_config=None,
-    rm_conf=None,
-    tmp_path=None,
-    archive_name=None,
-    compress=False,
-    manifest=None,
-):
     """
     This is the collection entry point. It accepts a manifest, a temporary
     directory in which to store output, and a boolean for optional compression.
@@ -203,76 +196,6 @@ def collect(
         core collection, this dictionary has the following structure:
         ``{ exception_type: [ (exception_obj, component), (exception_obj, component) ]}``.
     """
-    # Get the manifest per the following order:
-    # 1. "client_config.manifest"
-    # 2. "manifest" passed to the `insights.collect()`
-    # 3. "default_manifest" defined in `insights.specs.manifests`
-    manifest = manifests['default'] if manifest is None else manifest
-    if client_config and hasattr(client_config, 'manifest') and client_config.manifest:
-        manifest = client_config.manifest
-    manifest = load_manifest(manifest)
-
-    client = manifest.get("client", {})
-    plugins = manifest.get("plugins", {})
-
-    load_packages(plugins.get("packages", []))
-    apply_default_enabled(plugins)
-    apply_configs(plugins)
-    # process blacklist
-    black_list = client.get("blacklist", {})
-    black_list.update(rm_conf or {})
-    apply_blacklist(black_list)
-
-    # insights-client
-    if client_config and client_config.cmd_timeout:
-        try:
-            client['context']['args']['timeout'] = client_config.cmd_timeout
-        except LookupError:
-            log.warning('Could not set timeout option.')
-
-    try:
-        filters.load()
-    except IOError as e:
-        # could not load filters file
-        log.debug("No filters available: %s", str(e))
-    except AttributeError as e:
-        # problem parsing the filters
-        log.debug("Could not parse filters: %s", str(e))
-
-    output_path = os.path.join(tmp_path, archive_name)
-    fs.ensure_path(output_path)
-    fs.touch(os.path.join(output_path, "insights_archive.txt"))
-
-    broker = dr.Broker()
-    ctx = create_context(client.get("context", {}))
-    cleaner = Cleaner(client_config, black_list) if client_config else None
-    broker[ctx.__class__] = ctx
-    broker['cleaner'] = cleaner
-    broker['redact_config'] = black_list
-    broker['client_config'] = client_config
-
-    # run in "serial" mode by default
-    run_strategy = client.get("run_strategy", {"name": "serial"})
-    parallel = run_strategy.get("name") == "parallel"
-    to_persist = get_to_persist(client.get("persist", set()))
-
-    if client_config and client_config.obfuscate and parallel:
-        log.warning("Parallel collection is not supported when 'obfuscate' is enabled")
-        parallel = False
-
-    pool_args = run_strategy.get("args", {})
-    with get_pool(parallel, "insights-collector-pool", pool_args) as pool:
-        h = Hydration(output_path, ctx, pool=pool)
-        broker.add_observer(h.make_persister(to_persist))
-        dr.run_all(broker=broker, pool=pool)
-
-    collect_errors = _parse_broker_exceptions(broker, EXCEPTIONS_TO_REPORT)
-
-    cleaner.generate_report(archive_name) if cleaner else None
-
-    if compress:
-        return create_archive(output_path), collect_errors
-    return output_path, collect_errors
 
 
 def _parse_broker_exceptions(broker, exceptions_to_report):
@@ -344,6 +267,118 @@ def main():
     )
     print(archive)
 
+from insights.client.archive import InsightsArchive
+from insights.client.constants import InsightsConstants as constants
+from insights.client.utilities import systemd_notify_init_thread
+
+class Collector(object):
+    """
+    Collector for core collection
+    """
+
+    def __init__(self):
+        self.config = InsightsConfig()
+        self.archive = InsightsArchive(self.config)
+
+    def collect(output_path, archive_name, comporess=False):
+        if self.config and hasattr(self.config, 'manifest'):
+            manifest = self.config.manifest
+        manifest = load_manifest(manifest)
+
+        client = manifest.get("client", {})
+        plugins = manifest.get("plugins", {})
+
+        load_packages(plugins.get("packages", []))
+        apply_default_enabled(plugins)
+        apply_configs(plugins)
+        # process blacklist
+        black_list = client.get("blacklist", {})
+        black_list.update(rm_conf or {})
+        apply_blacklist(black_list)
+
+        # insights-client
+        if config and config.cmd_timeout:
+            try:
+                client['context']['args']['timeout'] = config.cmd_timeout
+            except LookupError:
+                log.warning('Could not set timeout option.')
+
+        try:
+            filters.load()
+        except IOError as e:
+            # could not load filters file
+            log.debug("No filters available: %s", str(e))
+        except AttributeError as e:
+            # problem parsing the filters
+            log.debug("Could not parse filters: %s", str(e))
+
+        full_output_path = os.path.join(output_path, archive_name)
+        fs.ensure_path(full_output_path)
+        fs.touch(os.path.join(full_output_path, "insights_archive.txt"))
+
+        broker = dr.Broker()
+        ctx = create_context(client.get("context", {}))
+        cleaner = Cleaner(config, black_list) if config else None
+        broker[ctx.__class__] = ctx
+        broker['cleaner'] = cleaner
+        broker['config'] = config
+
+        # run in "serial" mode by default
+        run_strategy = client.get("run_strategy", {"name": "serial"})
+        parallel = run_strategy.get("name") == "parallel"
+        to_persist = get_to_persist(client.get("persist", set()))
+        if config and config.obfuscate and parallel:
+            log.warning("Parallel collection is not supported when 'obfuscate' is enabled")
+            parallel = False
+
+        pool_args = run_strategy.get("args", {})
+        with get_pool(parallel, "insights-collector-pool", pool_args) as pool:
+            h = Hydration(output_path, ctx, pool=pool)
+            broker.add_observer(h.make_persister(to_persist))
+            dr.run_all(broker=broker, pool=pool)
+
+        collect_errors = _parse_broker_exceptions(broker, EXCEPTIONS_TO_REPORT)
+
+        cleaner.generate_report(archive_name) if cleaner else None
+        if compress:
+            return create_archive(output_path), collect_errors
+        return output_path, collect_errors
+
+    def run_collection(self):
+        '''
+        Initialize core collection here and generate the
+        output directory with collected data.
+        '''
+        self.set_up_logging()
+        try_auto_configuration(self.config)
+        logger.info(
+            'Starting to collect Insights data for %s' % determine_hostname(config.display_name)
+        )
+        # initialize systemd-notify thread
+        systemd_notify_init_thread()
+
+        self.archive.create_archive_dir()
+
+        logger.debug('Beginning to run core collection ...')
+
+        self.config.rhsm_facts_file = constants.rhsm_facts_file
+        self.collect(
+            tmp_path=self.archive.tmp_dir,
+            archive_name=self.archive.archive_name,
+            rm_conf=rm_conf or {},
+            client_config=self.config,
+        )
+
+        logger.debug('Core collection finished.')
+
+    def done(self):
+        """
+        Do finalization stuff
+        """
+        if self.config.output_dir:
+            return self.archive.archive_dir
+        else:
+            return self.archive.create_tar_file()
 
 if __name__ == "__main__":
     main()
