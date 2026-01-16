@@ -264,7 +264,7 @@ class HumanReadableFormatAdapter(FormatterAdapter):
             nargs="+",
             choices=["fail", "info", "pass", "none", "metadata", "fingerprint"],
             metavar="TYPE",
-            help="Show results per rule's type: 'fail', 'info', 'pass', 'none', 'metadata', and 'fingerprint'",
+            help="Show results per rule's type: 'fail', 'info', 'pass', 'none', 'metadata', and 'fingerprint'. It shouldn't be the last option before the archive.",
         )
         p.add_argument(
             "-F",
