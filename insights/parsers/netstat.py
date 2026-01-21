@@ -29,7 +29,7 @@ SsTUPNA - command ``ss -tupna``
 
 from collections import defaultdict
 
-from insights.core import CommandParser, LegacyItemAccess, Parser
+from insights.core import CommandParser, Parser
 from insights.core.exceptions import ParseException, SkipComponent
 from insights.core.plugins import parser
 from insights.parsers import keyword_search, parse_delimited_table
@@ -67,7 +67,7 @@ NETSTAT_SECTION_ID = {
 
 
 @parser(Specs.netstat_s)
-class NetstatS(LegacyItemAccess, CommandParser):
+class NetstatS(CommandParser, dict):
     """
     Parses data from the ``netstat -s`` command.
 
@@ -125,15 +125,15 @@ class NetstatS(LegacyItemAccess, CommandParser):
 
         >>> type(stats)
         <class 'insights.parsers.netstat.NetstatS'>
-        >>> sorted(stats.data.keys())  # Stored by heading, lower case
+        >>> sorted(stats.keys())  # Stored by heading, lower case
         ['icmp', 'icmpmsg', 'ip', 'ipext', 'tcp', 'tcpext', 'udp', 'udplite']
-        >>> 'ip' in stats.data
+        >>> 'ip' in stats
         True
-        >>> 'forwarded' in stats.data['ip']   # Then by keyword and value
+        >>> 'forwarded' in stats['ip']   # Then by keyword and value
         True
-        >>> stats.data['ip']['forwarded']  # Values are strings
+        >>> stats['ip']['forwarded']  # Values are strings
         '0'
-        >>> stats['ip']['forwarded']  # Direct access via LegacyItemAccess
+        >>> stats['ip']['forwarded']
         '0'
         >>> stats['ip']['requests_sent_out']  # Spaces converted to underscores
         '2886201'
@@ -145,7 +145,6 @@ class NetstatS(LegacyItemAccess, CommandParser):
     """
 
     def parse_content(self, content):
-        self.data = {}
         session = None
         first_layer = {}
         layer_key = ''
@@ -221,7 +220,7 @@ class NetstatS(LegacyItemAccess, CommandParser):
                         first_layer[layer_key] = second_layer
                         has_scd_layer = False
                         second_layer = {}
-                    self.data[session] = first_layer
+                    self[session] = first_layer
                     first_layer = {}
                     session = None
             if not session:
@@ -230,11 +229,14 @@ class NetstatS(LegacyItemAccess, CommandParser):
                     session = None
 
         # Assign to the last session
-        self.data[session] = first_layer
+        self[session] = first_layer
+
+    # Backward compatible
+    data = property(lambda self: self)
 
 
 @parser(Specs.netstat_agn)
-class NetstatAGN(CommandParser):
+class NetstatAGN(CommandParser, list):
     """
     Parse the ``netstat -agn`` command to get interface multicast infomation.
 
@@ -252,11 +254,11 @@ class NetstatAGN(CommandParser):
     Examples:
         >>> type(multicast)
         <class 'insights.parsers.netstat.NetstatAGN'>
-        >>> multicast.data[0]['interface']  # Access by row
+        >>> multicast[0]['interface']  # Access by row
         'lo'
-        >>> multicast.data[0]['refcnt']  # Values are strings
+        >>> multicast[0]['refcnt']  # Values are strings
         '1'
-        >>> multicast.data[0]['group']  # Column names are lower case
+        >>> multicast[0]['group']  # Column names are lower case
         '224.0.0.1'
         >>> mc_ifs = multicast.group_by_iface()  # Lists by interface name
         >>> len(mc_ifs['lo'])
@@ -279,7 +281,7 @@ class NetstatAGN(CommandParser):
             ... '''
         """
         result = defaultdict(list)
-        for entry in self.data:
+        for entry in self:
             result[entry["interface"]].append(
                 dict((k.lower(), v) for (k, v) in entry.items() if k in ["refcnt", "group"])
             )
@@ -289,7 +291,10 @@ class NetstatAGN(CommandParser):
         # Skip 'IPv6/IPv6 Group Memberships' and '-----' lines.
         content = content[1:2] + content[3:]
         table = parse_delimited_table(content)
-        self.data = [dict((k.lower(), v) for (k, v) in item.items()) for item in table]
+        self.extend(dict((k.lower(), v) for (k, v) in item.items()) for item in table)
+
+    # Backward compatible
+    data = property(lambda self: self)
 
 
 class NetstatSection(object):

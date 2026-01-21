@@ -29,7 +29,7 @@ SystemdOriginAccounting - file ``/etc/systemd/system.conf.d/origin-accounting.co
 ------------------------------------------------------------------------------------
 """
 
-from insights.core import ConfigParser, LegacyItemAccess
+from insights.core import ConfigParser
 from insights.core.plugins import parser
 from insights.parsr import iniparser
 from insights.specs import Specs
@@ -37,7 +37,7 @@ from insights import CommandParser
 from insights.util import deprecated
 
 
-class SystemdConf(CommandParser, LegacyItemAccess, ConfigParser):
+class SystemdConf(CommandParser, ConfigParser, dict):
     """
     Base class for parsing systemd INI like configuration files
 
@@ -56,7 +56,18 @@ class SystemdConf(CommandParser, LegacyItemAccess, ConfigParser):
                 options = [str(o.value) for o in section[name]]
                 section_dict[name] = options[0] if len(options) == 1 else options
             dict_all[section.name] = section_dict
-        self.data = dict_all
+        self.update(dict_all)
+
+    # Due to LegacyItemAccess was used, so discard and re-implement these bunder functions
+    # For backward compatibility
+    def __getitem__(self, item):
+        return self.get(item, {})
+
+    def __contains____(self, item):
+        return item in self
+
+    # Backward compatible
+    data = property(lambda self: self)
 
 
 @parser(Specs.systemd_docker)

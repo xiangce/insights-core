@@ -14,14 +14,13 @@ Examples:
 """
 
 from insights.core.plugins import combiner
-from insights import LegacyItemAccess
 from insights.parsers.ceph_cmd_json_parsing import CephOsdTree as CephOsdTreeParser
 from insights.parsers.ceph_insights import CephInsights
 from insights.parsers.ceph_osd_tree_text import CephOsdTreeText
 
 
 @combiner([CephOsdTreeParser, CephInsights, CephOsdTreeText])
-class CephOsdTree(LegacyItemAccess):
+class CephOsdTree(dict):
     """
     Combiner provides the information about ceph osd tree. It
     uses the results of the ``CephOsdTree``, ``CephInsights`` and ``CephOsdTreeText`` parsers.
@@ -30,8 +29,10 @@ class CephOsdTree(LegacyItemAccess):
 
     def __init__(self, cot, ci, cott):
         if cot:
-            self.data = cot
+            self.update(cot.data)
         elif ci:
-            self.data = ci.data['osd_tree']
+            self.update(ci['osd_tree'])
         else:
-            self.data = cott
+            self.update(cott)
+
+    data = property(lambda self: self)

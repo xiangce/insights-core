@@ -1,31 +1,14 @@
-from .. import parser, LegacyItemAccess, CommandParser
+from insights.core import CommandParser
+from insights.core.plugins import parser
 from insights.specs import Specs
 
 
 @parser(Specs.sestatus)
-class SEStatus(LegacyItemAccess, CommandParser):
+class SEStatus(CommandParser, dict):
     """Class to parse the ``sestatus -b`` command
 
-    Attributes:
-        data (dict): A dict likes
-        {
-            "loaded_policy_name": "targeted",
-            "policy_booleans": {
-                "antivirus_use_jit": False,
-                "abrt_anon_write": False,
-                "abrt_upload_watch_anon_write": True,
-                "antivirus_can_scan_system": False,
-                "abrt_handle_event": False,
-                "auditadm_exec_content": True,
-            },
-            "mode_from_config_file": "enforcing",
-            "current_mode": "enforcing",
-            "policy_mls_status": "enabled",
-            "policy_deny_unknown_status": "allowed",
-            "max_kernel_policy_version": "30"
-        }
+    Sample output::
 
-    ---Sample---
         Loaded policy name:             targeted
         Current mode:                   enforcing
         Mode from config file:          enforcing
@@ -74,4 +57,7 @@ class SEStatus(LegacyItemAccess, CommandParser):
         if sestatus_info['current_mode'] != 'disabled' and 'selinux_status' not in sestatus_info:
             sestatus_info['selinux_status'] = sestatus_info['current_mode']
 
-        self.data = sestatus_info
+        self.update(sestatus_info)
+
+    # Backward compatible
+    data = property(lambda self: self)

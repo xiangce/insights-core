@@ -227,7 +227,10 @@ def test_systemd_docker():
     assert docker_service.data["Service"]["Environment"] == "GOTRACEBACK=crash"
     assert docker_service.data["Install"]["WantedBy"] == "multi-user.target"
     assert list(docker_service.data["Install"].keys()) == ["WantedBy"]
-    assert docker_service.data["Service"]["ExecStart"] == "/bin/sh -c '/usr/bin/docker-current daemon --authorization-plugin=rhel-push-plugin --exec-opt native.cgroupdriver=systemd $OPTIONS $DOCKER_STORAGE_OPTIONS $DOCKER_NETWORK_OPTIONS $ADD_REGISTRY $BLOCK_REGISTRY $INSECURE_REGISTRY 2>&1 | /usr/bin/forward-journald -tag docker'"
+    assert (
+        docker_service.data["Service"]["ExecStart"]
+        == "/bin/sh -c '/usr/bin/docker-current daemon --authorization-plugin=rhel-push-plugin --exec-opt native.cgroupdriver=systemd $OPTIONS $DOCKER_STORAGE_OPTIONS $DOCKER_NETWORK_OPTIONS $ADD_REGISTRY $BLOCK_REGISTRY $INSECURE_REGISTRY 2>&1 | /usr/bin/forward-journald -tag docker'"
+    )
 
 
 def test_systemd_docker_empty():
@@ -244,13 +247,14 @@ def test_systemd_openshift_node():
 def test_systemd_system_conf():
     common_conf_info = config.SystemdSystemConf(context_wrap(SYSTEMD_SYSTEM_CONF))
     assert "Manager" in common_conf_info
-    print(common_conf_info.doc)
     assert common_conf_info["Manager"]["RuntimeWatchdogSec"] == "0"
     assert common_conf_info["Manager"]["ShutdownWatchdogSec"] == "10min"
 
 
 def test_systemd_system_origin_accounting():
-    common_system_origin_accounting = config.SystemdOriginAccounting(context_wrap(SYSTEMD_SYSTEM_ORIGIN_ACCOUNTING))
+    common_system_origin_accounting = config.SystemdOriginAccounting(
+        context_wrap(SYSTEMD_SYSTEM_ORIGIN_ACCOUNTING)
+    )
     assert "Manager" in common_system_origin_accounting
     assert common_system_origin_accounting["Manager"]["DefaultCPUAccounting"] == 'True'
     assert common_system_origin_accounting["Manager"]["DefaultBlockIOAccounting"] == 'False'
@@ -266,7 +270,11 @@ def test_systemd_logind_conf():
 def test_systemd_rpcbind_socket_conf():
     rpcbind_socket = config.SystemdRpcbindSocketConf(context_wrap(SYSTEMD_RPCBIND_SOCKET))
     assert "Socket" in rpcbind_socket
-    assert rpcbind_socket["Socket"]["ListenStream"] == ['/run/rpcbind.sock', '0.0.0.0:111', '[::]:111']
+    assert rpcbind_socket["Socket"]["ListenStream"] == [
+        '/run/rpcbind.sock',
+        '0.0.0.0:111',
+        '[::]:111',
+    ]
     assert rpcbind_socket["Socket"]["ListenDatagram"] == ['0.0.0.0:111', '[::]:111']
 
 
@@ -282,13 +290,15 @@ def test_systemd_empty():
 
 def test_doc_examples():
     env = {
-            'docker_service': config.SystemdDocker(context_wrap(SYSTEMD_DOCKER)),
-            'system_conf': config.SystemdSystemConf(context_wrap(SYSTEMD_SYSTEM_CONF)),
-            'system_origin_accounting': config.SystemdOriginAccounting(context_wrap(SYSTEMD_SYSTEM_ORIGIN_ACCOUNTING)),
-            'openshift_node_service': config.SystemdOpenshiftNode(context_wrap(SYSTEMD_OPENSHIFT_NODE)),
-            'logind_conf': config.SystemdLogindConf(context_wrap(SYSTEMD_LOGIND_CONF)),
-            'rpcbind_socket': config.SystemdRpcbindSocketConf(context_wrap(SYSTEMD_RPCBIND_SOCKET)),
-            'dnsmasq_service': config.SystemdDnsmasqServiceConf(context_wrap(SYSTEMD_DNSMASQ_SERVICE))
-          }
+        'docker_service': config.SystemdDocker(context_wrap(SYSTEMD_DOCKER)),
+        'system_conf': config.SystemdSystemConf(context_wrap(SYSTEMD_SYSTEM_CONF)),
+        'system_origin_accounting': config.SystemdOriginAccounting(
+            context_wrap(SYSTEMD_SYSTEM_ORIGIN_ACCOUNTING)
+        ),
+        'openshift_node_service': config.SystemdOpenshiftNode(context_wrap(SYSTEMD_OPENSHIFT_NODE)),
+        'logind_conf': config.SystemdLogindConf(context_wrap(SYSTEMD_LOGIND_CONF)),
+        'rpcbind_socket': config.SystemdRpcbindSocketConf(context_wrap(SYSTEMD_RPCBIND_SOCKET)),
+        'dnsmasq_service': config.SystemdDnsmasqServiceConf(context_wrap(SYSTEMD_DNSMASQ_SERVICE)),
+    }
     failed, total = doctest.testmod(config, globs=env)
     assert failed == 0

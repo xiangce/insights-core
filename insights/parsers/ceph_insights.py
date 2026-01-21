@@ -2,20 +2,20 @@
 ceph_insights - command ``ceph insights``
 =========================================
 """
+
 import json
 import re
-from .. import CommandParser, parser
+from insights import CommandParser, parser
 from insights.specs import Specs
 
 
 @parser(Specs.ceph_insights)
-class CephInsights(CommandParser):
+class CephInsights(CommandParser, dict):
     """
     Parse the output of the ``ceph insights`` command.
 
     Attributes:
         version (dict): version information of the Ceph cluster.
-        data (dict): a dictionary of the parsed output.
 
     The ``data`` attribute is a dictionary containing the parsed output of the
     ``ceph insights`` command. The following are available in ``data``:
@@ -51,15 +51,10 @@ class CephInsights(CommandParser):
         >>> isinstance(ceph_insights.data["health"], dict)
         True
     """
-    IGNORE_RE = [
-         r"\*\*\* DEVELOPER MODE",
-         r"\d+-\d+-\d+.+WARNING: all dangerous"
-    ]
 
-    bad_lines = [
-        "module 'insights' is not enabled",
-        "no valid command found"
-    ]
+    IGNORE_RE = [r"\*\*\* DEVELOPER MODE", r"\d+-\d+-\d+.+WARNING: all dangerous"]
+
+    bad_lines = ["module 'insights' is not enabled", "no valid command found"]
 
     def __init__(self, *args, **kwargs):
         kwargs.update(dict(extra_bad_lines=self.bad_lines))
@@ -84,14 +79,10 @@ class CephInsights(CommandParser):
         (this should never be the case in a production system), then "release",
         "major", and "minor" are set to None.
         """
-        self.version = {
-            "release": None,
-            "major": None,
-            "minor": None
-        }
-        self.version.update(self.data["version"])
+        self.version = {"release": None, "major": None, "minor": None}
+        self.version.update(self["version"])
 
     def parse_content(self, content):
         content = self._sanitize_content(content)
-        self.data = json.loads(''.join(content))
+        self.update(json.loads(''.join(content)))
         self._parse_version()

@@ -85,22 +85,24 @@ Examples:
     ...
     ... includedir /etc/xinetd.d
     ... '''
-    >>> xinetd_conf = shared[XinetdConf].data
+    >>> xinetd_conf = shared[XinetdConf]
     >>> assert xinetd_conf.get('is_valid') == False
     >>> 'defaults' in xinetd_conf
     False
 
 """
 
-from .. import LegacyItemAccess, Parser, parser, get_active_lines
+from insights.core import Parser
+from insights.core.plugins import parser
+from insights.parsers import get_active_lines
 from insights.specs import Specs
 
 
 @parser(Specs.xinetd_conf)
-class XinetdConf(LegacyItemAccess, Parser):
-    """Parse contents of file ``/etc/xinetd.conf`` and ``/etc/xinetd.d/*``."""
+class XinetdConf(Parser, dict):
+    """Parse contents of file ``/etc/xinetd.conf`` and ``/etc/xinetd.d/*`` into a Python dictionary."""
+
     def parse_content(self, content):
-        self.data = {}
         self.is_valid = True
         section = None
         for line in get_active_lines(content):
@@ -109,11 +111,11 @@ class XinetdConf(LegacyItemAccess, Parser):
                 section_con = {}
 
             elif "}" == line:
-                self.data[section] = section_con
+                self[section] = section_con
                 section = None
 
             elif "includedir" in line:
-                self.data["includedir"] = line.split(None, 1)[-1]
+                self["includedir"] = line.split(None, 1)[-1]
 
             elif not section and "defaults" == line:
                 section = line
@@ -127,4 +129,8 @@ class XinetdConf(LegacyItemAccess, Parser):
             else:
                 self.is_valid = False
                 break
-        self.is_includedir = '/etc/xinetd.d' == self.data.get('includedir')
+
+    is_includedir = property(lambda self: '/etc/xinetd.d' == self.get('includedir'))
+
+    # Backward compatible
+    data = property(lambda self: self)

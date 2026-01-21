@@ -2,7 +2,8 @@
 Sat5InsightsProperties - File ``redhat-access-insights.properties``
 ===================================================================
 """
-from insights.core import LegacyItemAccess, Parser
+
+from insights.core import Parser
 from insights.core.exceptions import SkipComponent
 from insights.core.plugins import parser
 from insights.parsers import get_active_lines
@@ -10,7 +11,7 @@ from insights.specs import Specs
 
 
 @parser(Specs.sat5_insights_properties)
-class Sat5InsightsProperties(LegacyItemAccess, Parser):
+class Sat5InsightsProperties(Parser, dict):
     """
     Class to parse configuration file
     ``/etc/redhat-access/redhat-access-insights.properties`` on Satellite 5
@@ -38,12 +39,15 @@ class Sat5InsightsProperties(LegacyItemAccess, Parser):
     Raises:
         SkipComponent: When file content is empty.
     """
+
     def parse_content(self, content):
         if not content:
             raise SkipComponent('Empty content.')
 
-        self.data = {}
         for line in get_active_lines(content):
             key, value = [l.strip() for l in line.split('=', 1)]
-            self.data[key] = value
+            self[key] = value
         self.enabled = self.get('enabled') == 'true'
+
+    # Backward compatible
+    data = property(lambda self: self)

@@ -94,7 +94,9 @@ PcsdSysconfig - file ``/etc/sysconfig/pcsd``
 --------------------------------------------
 """
 
-from insights import parser, SysconfigOptions, get_active_lines
+from insights.core import SysconfigOptions
+from insights.core.plugins import parser
+from insights.parsers import get_active_lines
 from insights.specs import Specs
 
 
@@ -126,7 +128,7 @@ class CorosyncSysconfig(SysconfigOptions):
     @property
     def options(self):
         """(str): The value of the ``COROSYNC_OPTIONS`` variable."""
-        return self.data.get('COROSYNC_OPTIONS', '')
+        return self.get('COROSYNC_OPTIONS', '')
 
 
 @parser(Specs.sysconfig_chronyd)
@@ -227,7 +229,7 @@ class DockerSysconfig(SysconfigOptions):
     @property
     def options(self):
         """Return the value of the 'OPTIONS' variable, or '' if not defined."""
-        return self.data.get('OPTIONS', '')
+        return self.get('OPTIONS', '')
 
 
 @parser(Specs.docker_storage)
@@ -250,7 +252,7 @@ class DockerSysconfigStorage(SysconfigOptions):
     @property
     def storage_options(self):
         """Return the value of the 'DOCKER_STORAGE_OPTIONS' variable, or '' if not defined."""
-        return self.data.get('DOCKER_STORAGE_OPTIONS', '')
+        return self.get('DOCKER_STORAGE_OPTIONS', '')
 
 
 @parser(Specs.foreman_tasks_config)
@@ -359,7 +361,7 @@ class KdumpSysconfig(SysconfigOptions):
     def parse_content(self, content):
         super(KdumpSysconfig, self).parse_content(content)
         for key in self.KDUMP_KEYS:
-            setattr(self, key, self.data.get(key, ''))
+            setattr(self, key, self.get(key, ''))
 
 
 @parser(Specs.sysconfig_kernel)
@@ -700,12 +702,10 @@ class Up2DateSysconfig(SysconfigOptions):
     """
 
     def parse_content(self, content):
-        up2date_info = {}
         for line in get_active_lines(content):
             if "[comment]" not in line and '=' in line:
                 key, val = line.split('=')
-                up2date_info[key.strip()] = val.strip()
-        self.data = up2date_info
+                self[key.strip()] = val.strip()
 
 
 @parser(Specs.sysconfig_virt_who)

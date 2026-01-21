@@ -4,16 +4,16 @@ VirtlogdConf - file ``/etc/libvirt/virtlogd.conf``
 
 The VirtlogdConf class parses the file ``/etc/libvirt/virtlogd.conf``.
 """
-from .. import LegacyItemAccess, Parser, parser
+
+from insights.core import Parser
+from insights.core.plugins import parser
 from insights.parsers import split_kv_pairs, get_active_lines
 from insights.specs import Specs
 
 
 @parser(Specs.virtlogd_conf)
-class VirtlogdConf(LegacyItemAccess, Parser):
-    """Parse content of ``/etc/libvirt/virtlogd.conf``. The virtlogd.conf
-    is in the standard ``conf`` file format and is read by the base parser
-    class ``LegacyItemAccess``.
+class VirtlogdConf(Parser, dict):
+    """Parse content of ``/etc/libvirt/virtlogd.conf`` into a Python dictionary.
 
     Sample ``/etc/libvirt/virtlogd.conf`` file::
 
@@ -89,9 +89,10 @@ class VirtlogdConf(LegacyItemAccess, Parser):
     Examples:
         >>> conf.get('max_backups')
         '3'
-
-    Attributes:
-        data (dict): Ex: ``{'max_backups': '3'}``
     """
+
     def parse_content(self, content):
-        self.data = split_kv_pairs(get_active_lines(content))
+        self.update(split_kv_pairs(get_active_lines(content)))
+
+    # Backward compatible
+    data = property(lambda self: self)

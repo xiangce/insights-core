@@ -470,11 +470,10 @@ class LegacyItemAccess(object):
         return self.data.get(item, default)
 
 
-class SysconfigOptions(Parser, LegacyItemAccess):
+class SysconfigOptions(Parser, dict):
     """
     A parser to handle the standard 'keyword=value' format of files in the
-    ``/etc/sysconfig`` directory.  These are provided in the standard 'data'
-    dictionary.
+    ``/etc/sysconfig`` directory.  These are provided in standard dictionary.
 
     Examples:
 
@@ -497,7 +496,7 @@ class SysconfigOptions(Parser, LegacyItemAccess):
 
             @property
             def options(self):
-                return self.data.get('OPTIONS', '')
+                return self.get('OPTIONS', '')
     """
 
     def parse_content(self, content):
@@ -524,12 +523,12 @@ class SysconfigOptions(Parser, LegacyItemAccess):
             # Only store lines if they aren't comments or blank
             elif len(words) > 0 and words[0][0] != '#':
                 unparsed_lines.append(line)
-        self.data = result
+
+        self.update(result) if result else None
         self.unparsed_lines = unparsed_lines
 
-    def keys(self):
-        """Return the list of keys (in no order) in the underlying dictionary."""
-        return self.data.keys()
+    # Backward compatible
+    data = property(lambda self: self)
 
 
 class CommandParser(Parser):
@@ -635,7 +634,7 @@ class ContainerParser(CommandParser):
         super(ContainerParser, self).__init__(context)
 
 
-class XMLParser(LegacyItemAccess, Parser):
+class XMLParser(Parser, dict):
     """
     A parser class that reads XML files.  Base your own parser on this.
 
@@ -683,14 +682,9 @@ class XMLParser(LegacyItemAccess, Parser):
         dom (Element): Root element of parsed XML file
         xmlns (str): The default XML namespace, an empty string when no
             namespace is declared.
-        data (dict): All required specific properties can be included in data.
     """
 
     def parse_dom(self):
-        """
-        If ``self.data`` is required, all child classes need to overwrite this
-        function to set it
-        """
         return {}
 
     def parse_content(self, content):
@@ -701,7 +695,6 @@ class XMLParser(LegacyItemAccess, Parser):
         default namespace) is ready for this function.
         """
         self.dom = self.xmlns = None
-        self.data = {}
         # ignore empty xml file
         if len(content) > 3:
             self.raw = '\n'.join(content)
@@ -711,7 +704,7 @@ class XMLParser(LegacyItemAccess, Parser):
                 if all(c in self.dom.tag for c in ["{", "}"])
                 else ""
             )
-            self.data = self.parse_dom()
+            self.update(self.parse_dom())
 
     def get_elements(self, element, xmlns=None):
         """
@@ -756,6 +749,9 @@ class XMLParser(LegacyItemAccess, Parser):
 
         real_element += element
         return self.dom.findall(real_element)
+
+    # Backward compatible
+    data = property(lambda self: self)
 
 
 class _PatchedSafeLoader(SafeLoader):
@@ -1650,13 +1646,8 @@ class IniConfigFile(ConfigParser):
             else:
                 self._dict[section.name] = section_dict
 
-    @property
-    def data(self):
-        """
-        Returns:
-            obj: self, it's for backward compatibility.
-        """
-        return self
+    # Backward compatible
+    data = property(lambda self: self)
 
     def defaults(self):
         """

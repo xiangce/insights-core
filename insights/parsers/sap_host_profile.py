@@ -5,7 +5,8 @@ SAPHostProfile - File ``/usr/sap/hostctrl/exe/host_profile``
 Shared parser for parsing the ``/usr/sap/hostctrl/exe/host_profile`` file.
 
 """
-from insights.core import LegacyItemAccess, Parser
+
+from insights.core import Parser
 from insights.core.exceptions import SkipComponent
 from insights.core.filters import add_filter
 from insights.core.plugins import parser
@@ -13,13 +14,14 @@ from insights.parsers import get_active_lines
 from insights.specs import Specs
 
 filter_list = [
-        'SAPSYSTEM', 'DIR_',
+    'SAPSYSTEM',
+    'DIR_',
 ]
 add_filter(Specs.sap_host_profile, filter_list)
 
 
 @parser(Specs.sap_host_profile)
-class SAPHostProfile(Parser, LegacyItemAccess):
+class SAPHostProfile(Parser, dict):
     """
     Class for parsing the `/usr/sap/hostctrl/exe/host_profile` file.
 
@@ -45,9 +47,11 @@ class SAPHostProfile(Parser, LegacyItemAccess):
     """
 
     def parse_content(self, content):
-        self.data = {}
         for line in get_active_lines(content):
             if '=' not in line:
                 raise SkipComponent("Incorrect line: '{0}'".format(line))
             key, val = line.split('=', 1)
-            self.data[key.strip()] = val.strip()
+            self[key.strip()] = val.strip()
+
+    # Backward compatible
+    data = property(lambda self: self)
