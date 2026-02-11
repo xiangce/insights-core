@@ -69,6 +69,7 @@ def test_core_rpm():
     with pytest.raises(SkipComponent):
         CoreEgg(rpms)
     rpm = CoreRpm(rpms)
+<<<<<<< HEAD
     assert rpm is not None
 <<<<<<< HEAD
 
@@ -82,3 +83,5 @@ def test_core_unknown():
         CoreEgg(rpms)
 =======
 >>>>>>> cf802d30 (feat: add CoreEgg/CoreRpm to identify current collector)
+=======
+>>>>>>> 5714f18e (feat: add components Egg/Rpm to identify the current collector)
