@@ -13,7 +13,7 @@
 %endif
 
 Name:           insights-core
-Version:        3.7.2.2
+Version:        3.7.3
 Release:        1%{?dist}
 Summary:        Insights Core is a data collection and analysis framework.
 
