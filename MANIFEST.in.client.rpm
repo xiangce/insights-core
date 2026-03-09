@@ -8,6 +8,7 @@ include insights/VERSION
 include insights/compliance_obfuscations.yaml
 include insights/defaults.yaml
 include insights/filters.yaml
+exclude insights/client/phase/v1.py
 prune examples
 prune insights/client/apps
 prune insights/parsr/examples/tests

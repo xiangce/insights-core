@@ -28,6 +28,7 @@ cp insights_core.egg-info/* tmp/EGG-INFO
 cp -r insights tmp
 cd tmp
 # remove unneeded bits to save on space
+rm -f insights/client/phase/v2.py
 rm -rf insights/archive
 find insights -path '*tests/*' -delete
 find insights -name '*.pyc' -delete
